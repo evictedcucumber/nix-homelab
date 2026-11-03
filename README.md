@@ -29,8 +29,8 @@ run alongside them. Only the short host names match:
 
 ## Development
 
-Enter the dev shell, which provides `just`, `nixos-rebuild`, the `nixd` language
-server and the formatters:
+Enter the dev shell, which provides `just`, `lefthook`, `nixos-rebuild`, the `nixd`
+language server and the formatters, and installs the Git pre-commit hook:
 
 ```bash
 nix develop
@@ -44,6 +44,7 @@ Run `just` to list the recipes:
 | Recipe                                 | What it does                                 |
 | -------------------------------------- | -------------------------------------------- |
 | `just fmt`                             | Format and lint with nixfmt, deadnix, statix |
+| `just pre-commit`                      | Run the pre-commit checks on every file      |
 | `just check`                           | Evaluate every host and check formatting     |
 | `just update [input]`                  | Update flake inputs                          |
 | `just build <host>`                    | Build a host's system without activating it  |
@@ -67,6 +68,10 @@ just deploy tcyclops
 ```bash
 just deploy cyclops
 ```
+
+The pre-commit hook checks the staged files with the same formatters and linters
+as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
+file, `git add` it and commit again.
 
 ## Packages from stable
 

@@ -8,6 +8,10 @@ default:
 fmt:
     nix fmt
 
+# Run the pre-commit hook's checks on every file, without committing
+pre-commit:
+    lefthook run pre-commit --all-files
+
 # Evaluate every host and run the flake checks
 check:
     nix flake check

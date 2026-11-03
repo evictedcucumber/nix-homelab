@@ -100,10 +100,12 @@
           default = pkgs.mkShellNoCC {
             packages = [
               pkgs.just
+              pkgs.lefthook
               pkgs.nixd
               pkgs.nixos-rebuild
               treefmt.config.build.wrapper
             ];
+            shellHook = "lefthook install > /dev/null";
           };
         }
       );
