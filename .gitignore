@@ -9,5 +9,8 @@ result-*
 **/.nixos-test-history
 /.claude/worktrees
 
+# Ignore host keys saved by `just deploy`
+.known_hosts*
+
 # Ignore auto-install ISOs written by `just iso`
 *.iso

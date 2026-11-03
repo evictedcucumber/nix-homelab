@@ -23,7 +23,7 @@ run alongside them. Only the short host names match:
 | `flake.nix`      | Hosts, install ISOs, dev shell, formatter and checks   |
 | `hosts/<name>/`  | Per-host configuration                                 |
 | `modules/nixos/` | Config shared between hosts, and the unattended installer |
-| `scripts/`       | Hyper-V and WSL network and VM setup                   |
+| `scripts/`       | Hyper-V network and VM setup                           |
 | `treefmt.nix`    | Formatters and linters run by `nix fmt`                |
 | `justfile`       | Common commands                                        |
 
@@ -51,13 +51,11 @@ Run `just` to list the recipes:
 | `just deploy <host> [target]`          | Build in WSL and activate on the host        |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
-| `just route`                           | Add WSL routes to the lab networks           |
-| `just hardware-config <host> [target]` | Fetch a host's generated hardware config     |
-| `just clean`                           | Remove `result` links and garbage collect    |
+| `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
+| `just clean`                           | Remove `result` links                        |
 
-`target` defaults to `captain@nix-<host>`, so a deploy can't reach a Debian VM
-through an SSH alias named `tcyclops` or `dcyclops`. Flakes only see files tracked
-by git, so `git add` new files before building.
+`target` defaults to the VM's address, and `cyclops` must be given one. Flakes only
+see files tracked by git, so `git add` new files before building.
 
 Deploy changes to a VM first, then to the server:
 
@@ -66,7 +64,7 @@ just deploy tcyclops
 ```
 
 ```bash
-just deploy cyclops
+just deploy cyclops captain@<address>
 ```
 
 The pre-commit hook checks the staged files with the same formatters and linters
@@ -91,7 +89,7 @@ out, update the `nixpkgs-stable` URL in `flake.nix`.
 | ---------------- | --------------------- | --------------------------------------- |
 | `10.0.3.0/24`    | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
 | `10.0.4.0/24`    | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
-| `192.168.2.0/24` | cyclops (production)  | Physical homelab LAN behind the host    |
+| TBD              | cyclops (production)  | Physical homelab LAN behind the host    |
 
 The Debian lab uses `10.0.1.0/24` and `10.0.2.0/24`. Both labs reach the internet
 through its `HomelabNAT` on `10.0.0.0/16`, because Windows supports only one NAT
@@ -99,33 +97,20 @@ per host. The scripts here never create, change or remove that NAT, so it must
 already exist. Each host holds the `.1` address of its VM's subnet as the gateway,
 and the VMs use static addresses because internal switches have no DHCP.
 
-After a WSL restart, re-run these two steps. The first is in an elevated
-PowerShell, because Windows resets forwarding on the WSL adapter:
+Nothing here changes WSL itself. Its default route already goes through Windows,
+so it needs no routes of its own. `just` uses addresses directly, so it needs no
+SSH config, and it keeps host keys in `.known_hosts` in the repo. Builds only add
+to WSL's Nix store, and every deploy activates on its target.
+
+After a WSL restart, re-run this in an elevated PowerShell, because Windows resets
+forwarding on the WSL adapter:
 
 ```powershell
 .\scripts\hyper-v\enable-interface-forwarding.ps1
 ```
 
-```bash
-just route
-```
-
-Then name the machines in `~/.ssh/config` in WSL, so that `just deploy <host>`
-finds them. Use your server's real address for `cyclops`:
-
-```text
-Host nix-dcyclops
-  HostName 10.0.3.2
-
-Host nix-tcyclops
-  HostName 10.0.4.2
-
-Host nix-cyclops
-  HostName 192.168.2.2
-```
-
 Rebuilding `dcyclops` changes its SSH host key, so clear the old one with
-`ssh-keygen -R 10.0.3.2`.
+`ssh-keygen -f .known_hosts -R 10.0.3.2`.
 
 ## Setting up the VMs
 
@@ -149,7 +134,7 @@ SSH logins are disabled.
    system. It only checks that it's running under Hyper-V, not which VM it's in,
    so it would also wipe a Debian VM. Only attach it to its own VM.
 
-3. Enable forwarding on the new switches and add the WSL routes, as described in
+3. Enable forwarding on the new switches, as described in
    [Networking](#networking).
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
@@ -183,7 +168,7 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
    until you do:
 
    ```bash
-   just hardware-config cyclops
+   just hardware-config cyclops captain@<address>
    ```
 
 4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
@@ -192,5 +177,5 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 5. Deploy:
 
    ```bash
-   just deploy cyclops
+   just deploy cyclops captain@<address>
    ```
