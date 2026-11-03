@@ -7,3 +7,6 @@ result-*
 
 # Ignore NixOS interactive test driver history
 **/.nixos-test-history
+
+# Ignore auto-install ISOs written by `just iso`
+*.iso
