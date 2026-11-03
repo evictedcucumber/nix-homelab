@@ -4,7 +4,7 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from WSL.
 
 | Host       | Machine                  | Role                                       |
 | ---------- | ------------------------ | ------------------------------------------ |
-| `homelab`  | Physical server          | Production                                 |
+| `cyclops`  | Physical server          | Production                                 |
 | `tcyclops` | Hyper-V VM on the WSL PC | Long-lived test VM                         |
 | `dcyclops` | Hyper-V VM on the WSL PC | Throwaway dev VM, rebuilt whenever needed  |
 
@@ -65,7 +65,7 @@ just deploy tcyclops
 ```
 
 ```bash
-just deploy homelab
+just deploy cyclops
 ```
 
 ## Packages from stable
@@ -86,7 +86,7 @@ out, update the `nixpkgs-stable` URL in `flake.nix`.
 | ---------------- | --------------------- | --------------------------------------- |
 | `10.0.3.0/24`    | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
 | `10.0.4.0/24`    | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
-| `192.168.2.0/24` | homelab (production)  | Physical homelab LAN behind the host    |
+| `192.168.2.0/24` | cyclops (production)  | Physical homelab LAN behind the host    |
 
 The Debian lab uses `10.0.1.0/24` and `10.0.2.0/24`. Both labs reach the internet
 through its `HomelabNAT` on `10.0.0.0/16`, because Windows supports only one NAT
@@ -106,7 +106,7 @@ just route
 ```
 
 Then name the machines in `~/.ssh/config` in WSL, so that `just deploy <host>`
-finds them. Use your server's real address for `homelab`:
+finds them. Use your server's real address for `cyclops`:
 
 ```text
 Host nix-dcyclops
@@ -115,7 +115,7 @@ Host nix-dcyclops
 Host nix-tcyclops
   HostName 10.0.4.2
 
-Host nix-homelab
+Host nix-cyclops
   HostName 192.168.2.2
 ```
 
@@ -158,7 +158,7 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 
 ## Setting up the server
 
-1. Install NixOS on `homelab` with a UEFI boot setup.
+1. Install NixOS on `cyclops` with a UEFI boot setup.
 
 2. Let WSL deploy to it. Add this to `/etc/nixos/configuration.nix` on the server,
    with your key, then run `sudo nixos-rebuild switch` there:
@@ -178,14 +178,14 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
    until you do:
 
    ```bash
-   just hardware-config homelab
+   just hardware-config cyclops
    ```
 
-4. Set `system.stateVersion` in `hosts/homelab/configuration.nix` to the release
+4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
    you installed, and `git add` the changes.
 
 5. Deploy:
 
    ```bash
-   just deploy homelab
+   just deploy cyclops
    ```

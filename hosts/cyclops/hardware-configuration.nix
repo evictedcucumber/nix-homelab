@@ -1,5 +1,5 @@
 # Placeholder so the flake evaluates; `just deploy` refuses to use it. Replace it
-# with the real config from the machine: `just hardware-config homelab`.
+# with the real config from the machine: `just hardware-config cyclops`.
 {
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";

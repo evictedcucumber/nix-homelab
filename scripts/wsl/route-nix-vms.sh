@@ -3,7 +3,7 @@
 # inside WSL2 (NAT mode):
 #   - 10.0.4.0/24    tcyclops (test)      -- Hyper-V "NixHomelab" internal vSwitch
 #   - 10.0.3.0/24    dcyclops (dev)       -- Hyper-V "NixHomelabDev" internal vSwitch
-#   - 192.168.2.0/24 homelab (production) -- physical homelab LAN behind the host
+#   - 192.168.2.0/24 cyclops (production) -- physical homelab LAN behind the host
 #
 # Why this is needed: WSL2 NAT mode puts WSL on its own subnet (e.g. 172.x).
 # The Windows host's default-route gateway, as seen from WSL, is also the

@@ -74,7 +74,7 @@
         );
     in
     {
-      nixosConfigurations = nixpkgs.lib.genAttrs ([ "homelab" ] ++ vmHosts) mkHost;
+      nixosConfigurations = nixpkgs.lib.genAttrs ([ "cyclops" ] ++ vmHosts) mkHost;
 
       packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso vmHosts);
 
