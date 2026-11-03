@@ -1,2 +1,15 @@
 # nix-homelab
-The repo use to build/deploy/maintain my homelab using nix and nixos
+
+Basic nix flake project used to build and deploy a NixOS homelab.
+
+## Build
+
+```bash
+nix build .#nixosConfigurations.homelab.config.system.build.toplevel
+```
+
+## Deploy
+
+```bash
+sudo nixos-rebuild switch --flake .#homelab
+```
