@@ -1,11 +1,9 @@
-{ ... }:
 {
-  networking.hostName = "homelab";
-  time.timeZone = "UTC";
+  imports = [ ./hardware-configuration.nix ];
 
-  services.openssh.enable = true;
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = false;
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-  system.stateVersion = "24.11";
+  # Set to the NixOS release first installed on this host, then never change it.
+  system.stateVersion = "26.05";
 }
