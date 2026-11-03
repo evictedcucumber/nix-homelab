@@ -51,6 +51,9 @@ Run `just` to list the recipes:
 | `just deploy <host> [target]`          | Build in WSL and activate on the host        |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
+| `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it   |
+| `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO           |
+| `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks |
 | `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
 
@@ -102,11 +105,11 @@ so it needs no routes of its own. `just` uses addresses directly, so it needs no
 SSH config, and it keeps host keys in `.known_hosts` in the repo. Builds only add
 to WSL's Nix store, and every deploy activates on its target.
 
-After a WSL restart, re-run this in an elevated PowerShell, because Windows resets
-forwarding on the WSL adapter:
+After a WSL restart, re-run this, because Windows resets forwarding on the WSL
+adapter:
 
-```powershell
-.\scripts\hyper-v\enable-interface-forwarding.ps1
+```bash
+just vm-forwarding
 ```
 
 Rebuilding `dcyclops` changes its SSH host key, so clear the old one with
@@ -118,32 +121,34 @@ Do this once per VM. The ISO installs the SSH key from
 `modules/nixos/common.nix`, which is the only way in, because password and root
 SSH logins are disabled.
 
-1. Build the ISO somewhere Windows can read it:
+1. Build the ISO, then create and start the VM. Run this from WSL and approve the
+   UAC prompt, because the scripts in `scripts/hyper-v/` need administrator rights:
 
    ```bash
-   just iso tcyclops /mnt/e/isos
+   just vm-create tcyclops
    ```
 
-2. Create and start the VM in an elevated PowerShell:
-
-   ```powershell
-   .\scripts\hyper-v\create-nix-vm.ps1 -VM tcyclops -IsoPath E:\isos\tcyclops-nix-auto.iso -Start
-   ```
+   The ISO goes in `E:\isos`, and the VM in `E:\Hyper-V VMs`. To put the ISO on
+   another Windows drive, run `just iso_dir=/mnt/d/isos vm-create tcyclops`. Pass
+   `-Force` or `-Reinstall` after the VM name to use those script options.
 
    The ISO **wipes the disk with no prompt**, then reboots into the installed
    system. It only checks that it's running under Hyper-V, not which VM it's in,
    so it would also wipe a Debian VM. Only attach it to its own VM.
 
-3. Enable forwarding on the new switches, as described in
-   [Networking](#networking).
+2. Enable forwarding on the new switches:
+
+   ```bash
+   just vm-forwarding
+   ```
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
 was when built, and a deploy updates it from there.
 
 To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 
-```powershell
-.\scripts\hyper-v\create-nix-vm.ps1 -VM dcyclops -IsoPath E:\isos\dcyclops-nix-auto.iso -Rebuild -Start
+```bash
+just vm-rebuild dcyclops
 ```
 
 ## Setting up the server

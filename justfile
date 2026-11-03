@@ -3,6 +3,10 @@ ssh_user := "captain"
 # Keep host keys in the repo, so deploying leaves ~/.ssh on this machine untouched
 export NIX_SSHOPTS := "-o UserKnownHostsFile=" + justfile_directory() + "/.known_hosts"
 
+iso_dir := "/mnt/e/isos"
+powershell := "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+elevated := powershell + ' -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -wa scripts/hyper-v/run-elevated.ps1)"'
+
 # List available recipes
 default:
     @just --list
@@ -38,7 +42,18 @@ deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "10.0.3.2" } e
 # Build a VM's unattended-install ISO into out; booting it wipes the VM's disk
 iso host out=".":
     nix build .#{{ host }}-iso --out-link result-{{ host }}-iso
-    install -m 644 result-{{ host }}-iso/iso/*.iso {{ out }}/{{ host }}-nix-auto.iso
+    install -D -m 644 result-{{ host }}-iso/iso/*.iso {{ out }}/{{ host }}-nix-auto.iso
+
+# Build a VM's ISO, then create and start the VM on Windows, after a UAC prompt
+vm-create host *flags: (iso host iso_dir)
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa {{ iso_dir }}/{{ host }}-nix-auto.iso)" -Start {{ flags }}
+
+# Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
+vm-rebuild host: (vm-create host "-Rebuild")
+
+# Enable Windows forwarding to the VM networks, after a UAC prompt; re-run after a WSL restart
+vm-forwarding *flags:
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
 
 # Replace a host's hardware config with one generated on the target
 hardware-config host target:
