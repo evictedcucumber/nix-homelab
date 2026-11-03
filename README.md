@@ -129,9 +129,9 @@ Rebuilding `dcyclops` changes its SSH host key, so clear the old one with
 
 ## Setting up the VMs
 
-Do this once per VM. Add your SSH public key to `openssh.authorizedKeys.keys` in
-`modules/nixos/common.nix` first: the flake won't evaluate without it, because
-password and root SSH logins are disabled, and the ISO installs that key.
+Do this once per VM. The ISO installs the SSH key from
+`modules/nixos/common.nix`, which is the only way in, because password and root
+SSH logins are disabled.
 
 1. Build the ISO somewhere Windows can read it:
 
@@ -166,7 +166,7 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 1. Install NixOS on `cyclops` with a UEFI boot setup.
 
 2. Let WSL deploy to it. Add this to `/etc/nixos/configuration.nix` on the server,
-   with your key, then run `sudo nixos-rebuild switch` there:
+   then run `sudo nixos-rebuild switch` there:
 
    ```nix
    services.openssh.enable = true;
@@ -175,7 +175,7 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
    users.users.captain = {
      isNormalUser = true;
      extraGroups = [ "wheel" ];
-     openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAA... you@wsl" ];
+     openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node" ];
    };
    ```
 

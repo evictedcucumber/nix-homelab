@@ -34,8 +34,9 @@ in
   users.users.${adminUser} = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];
-    # Add your public key, e.g. "ssh-ed25519 AAAA... you@machine".
-    openssh.authorizedKeys.keys = [ ];
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node"
+    ];
   };
 
   # The admin user has no password, so remote deploys can't answer a sudo prompt.
