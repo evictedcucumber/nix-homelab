@@ -44,6 +44,7 @@
             ./modules/nixos/dns.nix
             ./modules/nixos/firewall.nix
             ./modules/nixos/hardening.nix
+            ./modules/nixos/minimal.nix
             ./hosts/${name}/configuration.nix
           ];
         };

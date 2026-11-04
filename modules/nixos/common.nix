@@ -101,10 +101,4 @@ in
       message = "Add an SSH public key for ${adminUser} in modules/nixos/common.nix: password and root SSH logins are disabled, so deploying without one locks you out.";
     }
   ];
-
-  environment.systemPackages = [
-    pkgs.git
-    pkgs.htop
-    pkgs.vim
-  ];
 }

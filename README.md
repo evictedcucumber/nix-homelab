@@ -84,6 +84,15 @@ The pre-commit hook checks the staged files with the same formatters and linters
 as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
 file, `git add` it and commit again.
 
+## Packages
+
+`modules/nixos/minimal.nix` keeps hosts to a server's package set, using the nixpkgs
+minimal profile. Hosts have no man pages or other docs, `git`, `vim`, `htop`, `rsync`,
+`strace`, or copy of nixpkgs, and `nano` is the only editor. Of the NixOS tools, only
+`nixos-generate-config` stays, for `just hardware-config`. Add a package a host really
+needs to `environment.systemPackages`, then deploy it. There's no `nixos-rebuild` on the
+hosts, so to go back, boot an earlier generation or deploy an earlier commit.
+
 ## Packages from stable
 
 Everything comes from `nixos-unstable`. When a package is broken there, take that
