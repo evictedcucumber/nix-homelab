@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 let
   adminUser = "captain";
+  # Only set when a user is created. Change it after first boot, see the README.
+  defaultPassword = "PleaseChangeMe1";
 in
 {
   time.timeZone = "Africa/Johannesburg";
@@ -43,11 +45,22 @@ in
   users.users.${adminUser} = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];
-    # Only set when the user is created. Change it after first boot, see the README.
-    initialPassword = "PleaseChangeMe1";
+    initialPassword = defaultPassword;
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node"
     ];
+  };
+
+  users.users.riley = {
+    isNormalUser = true;
+    initialPassword = defaultPassword;
+  };
+
+  # NixOS needs a root account, so lock it instead. Passwords here are mutable, so
+  # locking it has to happen on every activation to catch one set by a manual install.
+  system.activationScripts.lockRoot = {
+    deps = [ "users" ];
+    text = "${pkgs.shadow}/bin/passwd --lock root >/dev/null";
   };
 
   # Remote deploys can't answer a sudo prompt.

@@ -124,11 +124,23 @@ just vm-forwarding
 changes. Reinstalling a VM changes its key, so `just vm-create` and `just vm-rebuild`
 remove the old one.
 
+## Users
+
+| User      | Sudo             | Login                                      |
+| --------- | ---------------- | ------------------------------------------ |
+| `captain` | Yes, no password | SSH key, or password at the console        |
+| `riley`   | No               | Password at the console only               |
+
+`root` still exists, because NixOS needs it, but every activation locks its password
+and its SSH login is off. Use `sudo` from `captain` instead. Emergency mode needs the
+root password, so it won't open. To recover from a bad deploy, boot an earlier
+generation from the boot menu.
+
 ## Setting up the VMs
 
 Do this once per VM. The ISO installs the SSH key from
 `modules/nixos/common.nix`, which is the only way in over SSH, because password and
-root SSH logins are disabled. It also sets the `captain` password below, for logging
+root SSH logins are disabled. It also sets the user passwords below, for logging
 in at the VM's console.
 
 1. Build the ISO, then create and start the VM. Run this from WSL and approve the
@@ -159,16 +171,16 @@ in at the VM's console.
    just vm-forwarding
    ```
 
-3. **Change the password after first boot.** `captain` starts with the password
-   `PleaseChangeMe1`, which is in this repo and readable by anyone on the VM through
-   the Nix store:
+3. **Change both passwords after first boot.** `captain` and `riley` both start with
+   the password `PleaseChangeMe1`, which is in this repo and readable by anyone on the
+   VM through the Nix store:
 
    ```bash
-   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 passwd
+   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 'passwd && sudo passwd riley'
    ```
 
-   Use `172.16.1.2` for `dcyclops`. The new password survives deploys, but rebuilding
-   `dcyclops` resets it, so change it again after each rebuild.
+   Use `172.16.1.2` for `dcyclops`. New passwords survive deploys, but rebuilding
+   `dcyclops` resets them, so change them again after each rebuild.
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
 was when built, and a deploy updates it from there.
@@ -207,9 +219,15 @@ just vm-rebuild dcyclops
 4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
    you installed, and `git add` the changes.
 
-5. Deploy. This leaves the password of the existing `captain` user alone, because
-   `PleaseChangeMe1` only applies when a user is created:
+5. Deploy. This creates `riley` with the password `PleaseChangeMe1` and locks `root`.
+   It leaves the password of the existing `captain` user alone:
 
    ```bash
    just deploy cyclops captain@<address>
+   ```
+
+6. Change the `riley` password:
+
+   ```bash
+   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> sudo passwd riley
    ```
