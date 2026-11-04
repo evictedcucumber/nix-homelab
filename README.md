@@ -23,6 +23,7 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `flake.nix`      | Hosts, install ISOs, dev shell, formatter and checks   |
 | `hosts/<name>/`  | Per-host configuration                                 |
 | `modules/nixos/` | Config shared between hosts, and the unattended installer |
+| `home/`          | Home Manager config for each user                      |
 | `scripts/`       | Hyper-V network and VM setup                           |
 | `treefmt.nix`    | Formatters and linters run by `nix fmt`                |
 | `justfile`       | Common commands                                        |
@@ -160,6 +161,18 @@ SSH only accepts public keys, and only for `captain`. Keys must be set in
 `modules/nixos/common.nix`, because `sshd` ignores `~/.ssh/authorized_keys`. Forwarding
 and tunnels are off, so `ssh -L`, `-R`, `-D` and `-A` won't work. To give `riley` SSH
 access, add a key for that user and add `riley` to `AllowUsers`.
+
+Home Manager manages each user's environment, and deploys with the system. Put settings
+for everyone in `home/common.nix`, and for one user in `home/<user>.nix`. Packages in
+`home.packages` go to that user only, so use them rather than the system list where you
+can. Set `home.stateVersion` once and leave it. A file Home Manager needs to replace is
+renamed with `.hm-bak`. If a deploy fails on `home-manager-<user>.service`, check
+`journalctl -u home-manager-<user>`. A new user also needs adding to the list in
+`modules/nixos/home-manager.nix`.
+
+Activation opens the Nix store read-only, because `riley` isn't allowed to reach the
+Nix daemon. An activation step that writes to the store, such as a custom
+`home.activation` entry calling `nix-env`, fails there.
 
 `modules/nixos/hardening.nix` applies the Anduril NixOS STIG where it fits this homelab.
 `stig-audit.md` lists every finding and why it was adopted or skipped. In day-to-day use:

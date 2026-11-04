@@ -11,6 +11,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -23,6 +28,7 @@
       nixpkgs,
       nixpkgs-stable,
       disko,
+      home-manager,
       treefmt-nix,
     }:
     let
@@ -40,10 +46,12 @@
               nixpkgs.overlays = [ self.overlays.stable ];
             }
             disko.nixosModules.disko
+            home-manager.nixosModules.home-manager
             ./modules/nixos/common.nix
             ./modules/nixos/dns.nix
             ./modules/nixos/firewall.nix
             ./modules/nixos/hardening.nix
+            ./modules/nixos/home-manager.nix
             ./modules/nixos/minimal.nix
             ./hosts/${name}/configuration.nix
           ];
