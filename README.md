@@ -128,7 +128,9 @@ SSH logins are disabled.
    just vm-create tcyclops
    ```
 
-   The ISO goes in your Windows Downloads folder, and the VM in `E:\Hyper-V VMs`.
+   The ISO goes in your Windows Downloads folder. The VM's disks, configuration and
+   checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script stops if
+   an existing VM has any of them elsewhere.
    To put the ISO elsewhere on a Windows drive, run
    `just iso_dir=/mnt/e/isos vm-create tcyclops`. Pass
    `-Force` or `-Reinstall` after the VM name to use those script options.

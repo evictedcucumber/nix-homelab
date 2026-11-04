@@ -157,7 +157,8 @@ $NatName = "HomelabNAT"
 $NatPrefix = "10.0.0.0/16"
 
 $VMPath = "E:\Hyper-V VMs"
-$VHDDirectory = Join-Path $VMPath "$Name\Virtual Hard Disks"
+$VMRoot = [System.IO.Path]::GetFullPath((Join-Path $VMPath $Name))
+$VHDDirectory = Join-Path $VMRoot "Virtual Hard Disks"
 $VHDPath = Join-Path $VHDDirectory "$Name.vhdx"
 $VHDSize = $VMConfig.VHDSize
 $VHDSizeGB = [int]($VHDSize / 1GB)
@@ -312,20 +313,19 @@ if ($Rebuild)
 
     # Delete leftover storage (VHD, .avhdx checkpoint files). Never touch
     # anything outside $VMPath.
-    $vmRoot = [System.IO.Path]::GetFullPath((Join-Path $VMPath $Name))
     $vmPathFull = [System.IO.Path]::GetFullPath($VMPath).TrimEnd('\', '/')
 
-    if ([string]::IsNullOrWhiteSpace($Name) -or -not $vmRoot.StartsWith($vmPathFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))
+    if ([string]::IsNullOrWhiteSpace($Name) -or -not $VMRoot.StartsWith($vmPathFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))
     {
-        throw "Refusing to delete '$vmRoot': it is not inside '$vmPathFull'."
+        throw "Refusing to delete '$VMRoot': it is not inside '$vmPathFull'."
     }
 
-    if (Test-Path -LiteralPath $vmRoot)
+    if (Test-Path -LiteralPath $VMRoot)
     {
-        if ($PSCmdlet.ShouldProcess($vmRoot, "Rebuild: delete VM storage (VHDs and checkpoint files)"))
+        if ($PSCmdlet.ShouldProcess($VMRoot, "Rebuild: delete VM storage (VHDs and checkpoint files)"))
         {
-            Write-Host "Deleting '$vmRoot'..." -ForegroundColor Cyan
-            Remove-Item -LiteralPath $vmRoot -Recurse -Force
+            Write-Host "Deleting '$VMRoot'..." -ForegroundColor Cyan
+            Remove-Item -LiteralPath $VMRoot -Recurse -Force
         }
     }
 }
@@ -379,6 +379,11 @@ if (-not $currentVm)
             -VHDPath $VHDPath `
             -SwitchName $SwitchName
 
+        Set-VM `
+            -Name $Name `
+            -SnapshotFileLocation $VMRoot `
+            -SmartPagingFilePath $VMRoot
+
         $vmIsNew = $true
     }
 }
@@ -399,6 +404,22 @@ if (-not $targetVm)
 {
     Write-Host "VM '$Name' does not exist (WhatIf mode or creation skipped). Skipping configuration steps." -ForegroundColor Yellow
     return
+}
+
+# Every file the VM uses must be under its own folder, including on a VM that
+# already existed. Move-VMStorage can move one that isn't.
+$misplaced = @(
+    $targetVm.ConfigurationLocation
+    $targetVm.SnapshotFileLocation
+    $targetVm.SmartPagingFilePath
+    Get-VMHardDiskDrive -VMName $Name | ForEach-Object { $_.Path }
+) | Where-Object {
+    $_ -and -not ([System.IO.Path]::GetFullPath($_).TrimEnd('\') + '\').StartsWith($VMRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+if ($misplaced)
+{
+    throw "VM '$Name' has files outside '$VMRoot': $($misplaced -join ', ')"
 }
 
 # ---------------------------------------------------------------------
@@ -639,7 +660,10 @@ Get-VM -Name $Name |
         AutomaticStartAction,
         AutomaticStopAction,
         AutomaticCheckpointsEnabled,
-        CheckpointType |
+        CheckpointType,
+        ConfigurationLocation,
+        SnapshotFileLocation,
+        SmartPagingFilePath |
     Format-List
 
 Get-VMProcessor -VMName $Name |
