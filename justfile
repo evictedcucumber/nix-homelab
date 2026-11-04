@@ -1,8 +1,11 @@
+# The user when a target is only an address, because it has sudo
 ssh_user := "captain"
+ssh_key := "~/.ssh/nix-homelab-control-node.key"
 
-# Keep host keys in their own directory, one file per address, so ~/.ssh/known_hosts is
-# left untouched. A key is trusted the first time, and a later change is refused.
-export NIX_SSHOPTS := "-o UserKnownHostsFile=~/.ssh/known_hosts.d/%h -o StrictHostKeyChecking=accept-new"
+# Offer only the control node's key. Keep host keys in their own directory, one file per
+# address, so ~/.ssh/known_hosts is left untouched. A key is trusted the first time, and a
+# later change is refused.
+export NIX_SSHOPTS := "-i " + ssh_key + " -o IdentitiesOnly=yes -o UserKnownHostsFile=~/.ssh/known_hosts.d/%h -o StrictHostKeyChecking=accept-new"
 
 powershell := "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 
@@ -38,12 +41,12 @@ build host:
     nix build .#nixosConfigurations.{{ host }}.config.system.build.toplevel
 
 # Build locally, then activate on the remote host
-deploy host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
-    nixos-rebuild switch --flake .#{{ host }} --target-host {{ target }} --ask-elevate-password
+deploy host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir
+    nixos-rebuild switch --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
 
 # Activate on the remote host until its next reboot, to try a risky change
-deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
-    nixos-rebuild test --flake .#{{ host }} --target-host {{ target }} --ask-elevate-password
+deploy-test host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir
+    nixos-rebuild test --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
 
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
 iso host out=iso_dir:
@@ -64,7 +67,7 @@ vm-forwarding *flags:
 
 # Replace a host's hardware config with one generated on the target
 hardware-config host target: _known-hosts-dir
-    ssh $NIX_SSHOPTS {{ target }} nixos-generate-config --show-hardware-config > hosts/{{ host }}/hardware-configuration.nix.tmp
+    ssh $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} nixos-generate-config --show-hardware-config > hosts/{{ host }}/hardware-configuration.nix.tmp
     mv hosts/{{ host }}/hardware-configuration.nix.tmp hosts/{{ host }}/hardware-configuration.nix
 
 # Delete local build result links

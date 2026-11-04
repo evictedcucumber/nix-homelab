@@ -57,8 +57,13 @@ Run `just` to list the recipes:
 | `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
 
-`target` defaults to the VM's address, and `cyclops` must be given one. Flakes only
-see files tracked by git, so `git add` new files before building.
+`target` defaults to the VM's address, and `cyclops` must be given one. It's an address,
+which logs in as `captain`, or `<user>@<address>`. Flakes only see files tracked by git,
+so `git add` new files before building.
+
+SSH connections from `just` offer only the private key
+`~/.ssh/nix-homelab-control-node.key`, which matches the public key in
+`modules/nixos/common.nix`.
 
 Deploy changes to a VM first, then to the server:
 
@@ -67,7 +72,7 @@ just deploy tcyclops
 ```
 
 ```bash
-just deploy cyclops captain@<address>
+just deploy cyclops <address>
 ```
 
 Deploys ask for `captain`'s sudo password on the target. Everything is built in WSL
@@ -183,7 +188,7 @@ in at the VM's console.
    VM through the Nix store:
 
    ```bash
-   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 'passwd && sudo passwd riley'
+   ssh -t -i ~/.ssh/nix-homelab-control-node.key -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 'passwd && sudo passwd riley'
    ```
 
    Use `172.16.1.2` for `dcyclops`. New passwords survive deploys, but rebuilding
@@ -220,7 +225,7 @@ just vm-rebuild dcyclops
    until you do:
 
    ```bash
-   just hardware-config cyclops captain@<address>
+   just hardware-config cyclops <address>
    ```
 
 4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
@@ -230,11 +235,11 @@ just vm-rebuild dcyclops
    It leaves the password of the existing `captain` user alone:
 
    ```bash
-   just deploy cyclops captain@<address>
+   just deploy cyclops <address>
    ```
 
 6. Change the passwords:
 
    ```bash
-   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> 'passwd && sudo passwd riley'
+   ssh -t -i ~/.ssh/nix-homelab-control-node.key -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> 'passwd && sudo passwd riley'
    ```
