@@ -70,6 +70,8 @@ just deploy tcyclops
 just deploy cyclops captain@<address>
 ```
 
+Deploys ask for `captain`'s sudo password on the target.
+
 The pre-commit hook checks the staged files with the same formatters and linters
 as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
 file, `git add` it and commit again.
@@ -126,10 +128,10 @@ remove the old one.
 
 ## Users
 
-| User      | Sudo             | Login                                      |
-| --------- | ---------------- | ------------------------------------------ |
-| `captain` | Yes, no password | SSH key, or password at the console        |
-| `riley`   | No               | Password at the console only               |
+| User      | UID and GID | Sudo               | Login                               |
+| --------- | ----------- | ------------------ | ----------------------------------- |
+| `captain` | 1000        | Yes, with password | SSH key, or password at the console |
+| `riley`   | 2000        | No                 | Password at the console only        |
 
 `root` still exists, because NixOS needs it, but every activation locks its password
 and its SSH login is off. Use `sudo` from `captain` instead. Emergency mode needs the
@@ -201,10 +203,10 @@ just vm-rebuild dcyclops
    ```nix
    services.openssh.enable = true;
    nix.settings.trusted-users = [ "captain" ];
-   security.sudo.wheelNeedsPassword = false;
    users.users.captain = {
      isNormalUser = true;
      extraGroups = [ "wheel" ];
+     initialPassword = "PleaseChangeMe1";
      openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node" ];
    };
    ```
@@ -226,8 +228,8 @@ just vm-rebuild dcyclops
    just deploy cyclops captain@<address>
    ```
 
-6. Change the `riley` password:
+6. Change the passwords:
 
    ```bash
-   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> sudo passwd riley
+   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> 'passwd && sudo passwd riley'
    ```

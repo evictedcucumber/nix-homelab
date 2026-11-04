@@ -39,11 +39,11 @@ build host:
 
 # Build locally, then activate on the remote host
 deploy host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
-    nixos-rebuild switch --flake .#{{ host }} --target-host {{ target }} --sudo
+    nixos-rebuild switch --flake .#{{ host }} --target-host {{ target }} --ask-elevate-password
 
 # Activate on the remote host until its next reboot, to try a risky change
 deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
-    nixos-rebuild test --flake .#{{ host }} --target-host {{ target }} --sudo
+    nixos-rebuild test --flake .#{{ host }} --target-host {{ target }} --ask-elevate-password
 
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
 iso host out=iso_dir:

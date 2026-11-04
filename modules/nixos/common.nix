@@ -44,6 +44,8 @@ in
 
   users.users.${adminUser} = {
     isNormalUser = true;
+    uid = 1000;
+    group = adminUser;
     extraGroups = [ "wheel" ];
     initialPassword = defaultPassword;
     openssh.authorizedKeys.keys = [
@@ -53,7 +55,14 @@ in
 
   users.users.riley = {
     isNormalUser = true;
+    uid = 2000;
+    group = "riley";
     initialPassword = defaultPassword;
+  };
+
+  users.groups = {
+    ${adminUser}.gid = 1000;
+    riley.gid = 2000;
   };
 
   # NixOS needs a root account, so lock it instead. Passwords here are mutable, so
@@ -62,9 +71,6 @@ in
     deps = [ "users" ];
     text = "${pkgs.shadow}/bin/passwd --lock root >/dev/null";
   };
-
-  # Remote deploys can't answer a sudo prompt.
-  security.sudo.wheelNeedsPassword = false;
 
   assertions = [
     {
