@@ -43,12 +43,14 @@ in
   users.users.${adminUser} = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];
+    # Only set when the user is created. Change it after first boot, see the README.
+    initialPassword = "PleaseChangeMe1";
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node"
     ];
   };
 
-  # The admin user has no password, so remote deploys can't answer a sudo prompt.
+  # Remote deploys can't answer a sudo prompt.
   security.sudo.wheelNeedsPassword = false;
 
   assertions = [

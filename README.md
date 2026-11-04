@@ -120,8 +120,9 @@ remove the old one.
 ## Setting up the VMs
 
 Do this once per VM. The ISO installs the SSH key from
-`modules/nixos/common.nix`, which is the only way in, because password and root
-SSH logins are disabled.
+`modules/nixos/common.nix`, which is the only way in over SSH, because password and
+root SSH logins are disabled. It also sets the `captain` password below, for logging
+in at the VM's console.
 
 1. Build the ISO, then create and start the VM. Run this from WSL and approve the
    UAC prompt, because the scripts in `scripts/hyper-v/` need administrator rights:
@@ -150,6 +151,17 @@ SSH logins are disabled.
    ```bash
    just vm-forwarding
    ```
+
+3. **Change the password after first boot.** `captain` starts with the password
+   `PleaseChangeMe1`, which is in this repo and readable by anyone on the VM through
+   the Nix store:
+
+   ```bash
+   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/10.0.4.2 captain@10.0.4.2 passwd
+   ```
+
+   Use `10.0.3.2` for `dcyclops`. The new password survives deploys, but rebuilding
+   `dcyclops` resets it, so change it again after each rebuild.
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
 was when built, and a deploy updates it from there.
@@ -188,7 +200,8 @@ just vm-rebuild dcyclops
 4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
    you installed, and `git add` the changes.
 
-5. Deploy:
+5. Deploy. This leaves the password of the existing `captain` user alone, because
+   `PleaseChangeMe1` only applies when a user is created:
 
    ```bash
    just deploy cyclops captain@<address>
