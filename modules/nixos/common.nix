@@ -39,10 +39,26 @@ in
 
   services.openssh = {
     enable = true;
+    # Only keys set in this repo count, not ones added to ~/.ssh on the host.
+    authorizedKeysInHomedir = false;
+    hostKeys = [
+      {
+        type = "ed25519";
+        path = "/etc/ssh/ssh_host_ed25519_key";
+      }
+    ];
     settings = {
+      AuthenticationMethods = "publickey";
       PasswordAuthentication = false;
       KbdInteractiveAuthentication = false;
       PermitRootLogin = "no";
+      AllowUsers = [ adminUser ];
+      MaxAuthTries = 3;
+      LoginGraceTime = 30;
+      AllowTcpForwarding = false;
+      AllowAgentForwarding = false;
+      AllowStreamLocalForwarding = false;
+      PermitTunnel = false;
     };
   };
 

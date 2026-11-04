@@ -146,11 +146,15 @@ and its SSH login is off. Use `sudo` from `captain` instead. Emergency mode need
 root password, so it won't open. To recover from a bad deploy, boot an earlier
 generation from the boot menu.
 
+SSH only accepts public keys, and only for `captain`. Keys must be set in
+`modules/nixos/common.nix`, because `sshd` ignores `~/.ssh/authorized_keys`. Forwarding
+and tunnels are off, so `ssh -L`, `-R`, `-D` and `-A` won't work. To give `riley` SSH
+access, add a key for that user and add `riley` to `AllowUsers`.
+
 ## Setting up the VMs
 
 Do this once per VM. The ISO installs the SSH key from
-`modules/nixos/common.nix`, which is the only way in over SSH, because password and
-root SSH logins are disabled. It also sets the user passwords below, for logging
+`modules/nixos/common.nix`, which is the only way in over SSH. It also sets the user passwords below, for logging
 in at the VM's console.
 
 1. Build the ISO, then create and start the VM. Run this from WSL and approve the
@@ -211,7 +215,14 @@ just vm-rebuild dcyclops
    then run `sudo nixos-rebuild switch` there:
 
    ```nix
-   services.openssh.enable = true;
+   services.openssh = {
+     enable = true;
+     settings = {
+       PasswordAuthentication = false;
+       KbdInteractiveAuthentication = false;
+       PermitRootLogin = "no";
+     };
+   };
    nix.settings.trusted-users = [ "captain" ];
    users.users.captain = {
      isNormalUser = true;
