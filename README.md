@@ -191,7 +191,7 @@ Nix daemon. An activation step that writes to the store, such as a custom
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
 outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
 and hosts don't answer ping. A host can also connect to its own [containers](#containers),
-and forwards inbound port 53 to [Pi-hole](#pi-hole).
+and forwards inbound DNS and web traffic for one extra address to [Pi-hole](#pi-hole).
 
 DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
 to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
@@ -258,11 +258,36 @@ build.
 ## Pi-hole
 
 `modules/nixos/pihole.nix` runs Pi-hole on every host, in a container named `pihole` at
-`10.233.0.2`. Point clients at the host's address on port 53, over UDP or TCP:
+`10.233.0.2`. Clients reach it on its own address on the host's network, set with
+`pihole.lanAddress`: `172.16.0.3` on `tcyclops` and `172.16.1.3` on `dcyclops`. `cyclops`
+has none yet, so nothing outside it can reach Pi-hole there.
+
+| Service | Port |
+| --- | --- |
+| DNS | 53, UDP and TCP |
+| Web interface | 443, with port 80 redirecting to it |
 
 ```bash
-dig @172.16.0.2 pi.hole
+dig @172.16.0.3 pi.hole
 ```
+
+The web interface is at `https://172.16.0.3/`, or `https://pi.hole/` for clients using
+Pi-hole for DNS. Its certificate is self-signed, so browsers warn about it. The password
+is generated when Pi-hole first starts, and stays out of the Nix store. Read it on the
+host:
+
+```bash
+sudo cat /var/lib/nixos-containers/pihole/var/lib/pihole/web-password.env
+```
+
+To change it, edit that file and run
+`sudo nixos-container run pihole -- systemctl restart pihole-ftl`. Settings are read-only
+in the interface, because they come from this repo.
+
+The address is a second address on the host, not a separate interface, because containers
+only get their [`ve-<name>` interface](#containers). The host forwards these ports to the
+container and drops everything else sent to the address, so SSH stays on the host's own
+address, and Pi-hole doesn't answer on that one.
 
 It starts on boot, and restarts if FTL or the container exits for any reason, until
 stopped with `sudo systemctl stop container@pihole`. Check it from the host:
@@ -276,11 +301,8 @@ still talk to it in plain DNS, and only from private addresses (`10.0.0.0/8`,
 `172.16.0.0/12` and `192.168.0.0/16`). The host itself keeps using `dnsdist` directly, and
 other containers can't reach Pi-hole.
 
-So far it only answers DNS. It has no web interface or blocklists, and blocks nothing:
-`services.pihole-ftl.lists` needs the web server, and the container needs outbound HTTPS
-to download lists. `pi.hole` resolves to the container's address, which clients can't reach.
-FTL logs a few warnings each time it starts, about the empty gravity database, the missing
-web server and its PID file. They don't affect DNS.
+It has no blocklists yet, and blocks nothing: the container needs outbound HTTPS to
+download lists for `services.pihole-ftl.lists`.
 
 ## Setting up the VMs
 
