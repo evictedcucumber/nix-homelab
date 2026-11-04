@@ -128,8 +128,9 @@ SSH logins are disabled.
    just vm-create tcyclops
    ```
 
-   The ISO goes in `E:\isos`, and the VM in `E:\Hyper-V VMs`. To put the ISO on
-   another Windows drive, run `just iso_dir=/mnt/d/isos vm-create tcyclops`. Pass
+   The ISO goes in your Windows Downloads folder, and the VM in `E:\Hyper-V VMs`.
+   To put the ISO elsewhere on a Windows drive, run
+   `just iso_dir=/mnt/e/isos vm-create tcyclops`. Pass
    `-Force` or `-Reinstall` after the VM name to use those script options.
 
    The ISO **wipes the disk with no prompt**, then reboots into the installed

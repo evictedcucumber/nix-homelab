@@ -3,8 +3,13 @@ ssh_user := "captain"
 # Keep host keys in the repo, so deploying leaves ~/.ssh on this machine untouched
 export NIX_SSHOPTS := "-o UserKnownHostsFile=" + justfile_directory() + "/.known_hosts"
 
-iso_dir := "/mnt/e/isos"
 powershell := "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+
+# Where ISOs go, or empty for the Windows Downloads folder
+iso_dir := ""
+
+# A command rather than a value, so only the recipes that need it start PowerShell
+downloads := 'p="$(' + powershell + " -NoProfile -NonInteractive -Command \"(New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path\" | tr -d '\\r')\" && [ -n \"$p\" ] && wslpath -u \"$p\""
 elevated := powershell + ' -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -wa scripts/hyper-v/run-elevated.ps1)"'
 
 # List available recipes
@@ -39,14 +44,14 @@ deploy host target=(ssh_user + "@" + if host == "dcyclops" { "10.0.3.2" } else i
 deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "10.0.3.2" } else if host == "tcyclops" { "10.0.4.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host)
     nixos-rebuild test --flake .#{{ host }} --target-host {{ target }} --sudo
 
-# Build a VM's unattended-install ISO into out; booting it wipes the VM's disk
-iso host out=".":
+# Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
+iso host out=iso_dir:
     nix build .#{{ host }}-iso --out-link result-{{ host }}-iso
-    install -D -m 644 result-{{ host }}-iso/iso/*.iso {{ out }}/{{ host }}-nix-auto.iso
+    dir="{{ out }}"; dir="${dir:-$({{ downloads }})}" && install -D -m 644 result-{{ host }}-iso/iso/*.iso "$dir/{{ host }}-nix-auto.iso"
 
 # Build a VM's ISO, then create and start the VM on Windows, after a UAC prompt
 vm-create host *flags: (iso host iso_dir)
-    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa {{ iso_dir }}/{{ host }}-nix-auto.iso)" -Start {{ flags }}
+    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
 
 # Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
 vm-rebuild host: (vm-create host "-Rebuild")
