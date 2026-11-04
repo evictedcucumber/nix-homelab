@@ -83,6 +83,9 @@ in
 
     # Containers resolve through the host, so their lookups also leave over TLS. Root in a
     # container can flush its firewall, so the host only opens DNS to those that asked for it.
+    # Container files keep their in-container UIDs on disk, which can match host users.
+    systemd.tmpfiles.rules = [ "d /var/lib/nixos-containers 0700 root root -" ];
+
     services.resolved.settings.Resolve.DNSStubListenerExtra = hostAddress;
     networking.firewall.extraInputRules = lib.mkIf (dnsInterfaces != [ ]) ''
       iifname { ${lib.concatStringsSep ", " dnsInterfaces} } meta l4proto { tcp, udp } th dport 53 accept
