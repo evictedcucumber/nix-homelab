@@ -54,6 +54,7 @@
             ./modules/nixos/hardening.nix
             ./modules/nixos/home-manager.nix
             ./modules/nixos/minimal.nix
+            ./modules/nixos/pihole.nix
             ./hosts/${name}/configuration.nix
           ];
         };

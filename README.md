@@ -190,11 +190,12 @@ Nix daemon. An activation step that writes to the store, such as a custom
 `modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
 outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
-and hosts don't answer ping. A host can also connect to its own [containers](#containers).
+and hosts don't answer ping. A host can also connect to its own [containers](#containers),
+and forwards inbound port 53 to [Pi-hole](#pi-hole).
 
 DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
 to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
-plain DNS fallback, and the firewall blocks port 53. `chrony` uses
+plain DNS fallback, and the firewall blocks outbound port 53. `chrony` uses
 `time.cloudflare.com` over NTS.
 
 ## Containers
@@ -253,6 +254,33 @@ A directory shared with `bindMounts` shows up as unowned, so share a writable on
 `allowedTCPPorts` entry on the host, though the container's firewall must still allow it.
 Containers are declarative only: `nixos-container create` needs a build, and hosts don't
 build.
+
+## Pi-hole
+
+`modules/nixos/pihole.nix` runs Pi-hole on every host, in a container named `pihole` at
+`10.233.0.2`. Point clients at the host's address on port 53, over UDP or TCP:
+
+```bash
+dig @172.16.0.2 pi.hole
+```
+
+It starts on boot, and restarts if FTL or the container exits for any reason, until
+stopped with `sudo systemctl stop container@pihole`. Check it from the host:
+
+```bash
+sudo nixos-container run pihole -- journalctl -u pihole-ftl
+```
+
+Pi-hole resolves through the host, so lookups leave over TLS like the host's own. Clients
+still talk to it in plain DNS, and only from private addresses (`10.0.0.0/8`,
+`172.16.0.0/12` and `192.168.0.0/16`). The host itself keeps using `dnsdist` directly, and
+other containers can't reach Pi-hole.
+
+So far it only answers DNS. It has no web interface or blocklists, and blocks nothing:
+`services.pihole-ftl.lists` needs the web server, and the container needs outbound HTTPS
+to download lists. `pi.hole` resolves to the container's address, which clients can't reach.
+FTL logs a few warnings each time it starts, about the empty gravity database, the missing
+web server and its PID file. They don't affect DNS.
 
 ## Setting up the VMs
 
