@@ -27,7 +27,6 @@
   networking = {
     useDHCP = false;
     usePredictableInterfaceNames = false;
-    nameservers = [ "1.1.1.1" ];
   };
 
   disko.devices.disk.main = {
