@@ -50,6 +50,7 @@ Run `just` to list the recipes:
 | `just build <host>`                    | Build a host's system without activating it  |
 | `just deploy <host> [target]`          | Build in WSL and activate on the host        |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
+| `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
 | `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it   |
 | `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO           |
@@ -151,9 +152,18 @@ SSH only accepts public keys, and only for `captain`. Keys must be set in
 and tunnels are off, so `ssh -L`, `-R`, `-D` and `-A` won't work. To give `riley` SSH
 access, add a key for that user and add `riley` to `AllowUsers`.
 
-`modules/nixos/hardening.nix` applies the parts of the Anduril NixOS STIG chosen for this
-homelab, mainly `auditd` and its rules. Only `root` and `wheel` can use Nix, so `riley`
-can't. `stig-audit.md` lists every finding and why it was adopted or skipped.
+`modules/nixos/hardening.nix` applies the Anduril NixOS STIG where it fits this homelab.
+`stig-audit.md` lists every finding and why it was adopted or skipped. In day-to-day use:
+
+- Only `root` and `wheel` can use Nix, so `riley` can't.
+- New passwords need 15 characters, all four character classes and 8 changed characters,
+  and can't be dictionary words. Root only gets a warning, so `sudo passwd` can skip this.
+- `sudo` asks for the password every time.
+- Three failed console logins in 15 minutes lock an account for 15 minutes.
+- More than 30 new SSH connections a minute from one address are dropped.
+- USB devices plugged in after boot are blocked until allowed with `usbguard`.
+- A weekly AIDE check of `/boot` and `/etc` fails after any deploy. To accept the new
+  baseline, delete `/var/lib/aide/aide.db` and the next run recreates it.
 
 `modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
