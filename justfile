@@ -38,11 +38,11 @@ build host:
     nix build .#nixosConfigurations.{{ host }}.config.system.build.toplevel
 
 # Build locally, then activate on the remote host
-deploy host target=(ssh_user + "@" + if host == "dcyclops" { "10.0.3.2" } else if host == "tcyclops" { "10.0.4.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
+deploy host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
     nixos-rebuild switch --flake .#{{ host }} --target-host {{ target }} --sudo
 
 # Activate on the remote host until its next reboot, to try a risky change
-deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "10.0.3.2" } else if host == "tcyclops" { "10.0.4.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
+deploy-test host target=(ssh_user + "@" + if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " " + ssh_user + "@<address>") }): (_require-hardware-config host) _known-hosts-dir
     nixos-rebuild test --flake .#{{ host }} --target-host {{ target }} --sudo
 
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
@@ -53,7 +53,7 @@ iso host out=iso_dir:
 # Build a VM's ISO, create and start the VM on Windows after a UAC prompt, and forget its old host key
 vm-create host *flags: (iso host iso_dir) _known-hosts-dir
     dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
-    rm -f ~/.ssh/known_hosts.d/{{ if host == "dcyclops" { "10.0.3.2" } else { "10.0.4.2" } }}
+    rm -f ~/.ssh/known_hosts.d/{{ if host == "dcyclops" { "172.16.1.2" } else { "172.16.0.2" } }}
 
 # Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
 vm-rebuild host: (vm-create host "-Rebuild")

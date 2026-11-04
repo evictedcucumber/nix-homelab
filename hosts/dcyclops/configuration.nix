@@ -4,10 +4,10 @@
   networking = {
     interfaces.eth0.ipv4.addresses = [
       {
-        address = "10.0.3.2";
+        address = "172.16.1.2";
         prefixLength = 24;
       }
     ];
-    defaultGateway = "10.0.3.1";
+    defaultGateway = "172.16.1.1";
   };
 }

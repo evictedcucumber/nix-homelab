@@ -11,13 +11,15 @@
     Each VM gets its own internal virtual switch and subnet; the host holds
     the .1 address of each subnet as the guest gateway:
 
-      VM        Switch       Host/gateway IP   Subnet
-      tcyclops  NixHomelab      10.0.4.1       10.0.4.0/24
-      dcyclops  NixHomelabDev   10.0.3.1       10.0.3.0/24
+      VM        Switch          Host/gateway IP   Subnet
+      tcyclops  NixHomelab      172.16.0.1        172.16.0.0/24
+      dcyclops  NixHomelabDev   172.16.1.1        172.16.1.0/24
 
-    Both subnets rely on the existing shared NAT, "HomelabNAT", with prefix
-    10.0.0.0/16 (WinNAT supports only one NAT network per host). This script
-    never creates, changes or removes a NAT; it stops if that one is missing.
+    Both subnets use this lab's own NAT, "NixHomelabNAT", with prefix
+    172.16.0.0/16, which this script creates if it is missing. It never changes
+    or removes a NAT, and stops if an existing one conflicts with that prefix.
+    Microsoft supports only one NAT per host, so it warns if another one exists,
+    such as the Debian lab's "HomelabNAT".
 
       tcyclops  Permanent test VM. Created once and reconciled on re-runs.
       dcyclops  Ephemeral dev VM. Brought up, used, brought down, and rebuilt
@@ -114,8 +116,8 @@ $VMConfigs = @{
         VHDSize       = 64GB
         Ephemeral     = $false
         SwitchName    = "NixHomelab"
-        HostIPAddress = "10.0.4.1"
-        Subnet        = "10.0.4.0/24"
+        HostIPAddress = "172.16.0.1"
+        Subnet        = "172.16.0.0/24"
     }
     dcyclops = @{
         Name          = "dcyclops.nix.homelab.zezura.cc"
@@ -124,8 +126,8 @@ $VMConfigs = @{
         VHDSize       = 64GB
         Ephemeral     = $true
         SwitchName    = "NixHomelabDev"
-        HostIPAddress = "10.0.3.1"
-        Subnet        = "10.0.3.0/24"
+        HostIPAddress = "172.16.1.1"
+        Subnet        = "172.16.1.0/24"
     }
 }
 
@@ -144,11 +146,11 @@ $HostIPAddress = $VMConfig.HostIPAddress
 $PrefixLength = 24
 $Subnet = $VMConfig.Subnet
 
-# WinNAT allows only one NAT network per host, so these switches share the NAT
-# owned by the Debian lab. Its 10.0.0.0/16 prefix contains 10.0.3.0/24 (dcyclops)
-# and 10.0.4.0/24 (tcyclops).
-$NatName = "HomelabNAT"
-$NatPrefix = "10.0.0.0/16"
+# Both switches share this lab's own NAT. Its 172.16.0.0/16 prefix contains
+# 172.16.0.0/24 (tcyclops) and 172.16.1.0/24 (dcyclops).
+$NatName = "NixHomelabNAT"
+$NatPrefix = "172.16.0.0/16"
+$LabAdapterAliases = @("vEthernet (NixHomelab)", "vEthernet (NixHomelabDev)")
 
 $VMPath = "E:\Hyper-V VMs"
 $VMRoot = [System.IO.Path]::GetFullPath((Join-Path $VMPath $Name))
@@ -175,6 +177,63 @@ catch
     throw "ISO not found: $IsoPath"
 }
 
+function Test-CidrOverlap
+{
+    param(
+        [Parameter(Mandatory)][string]$CidrA,
+        [Parameter(Mandatory)][string]$CidrB
+    )
+
+    $ranges = foreach ($cidr in $CidrA, $CidrB)
+    {
+        $addr, $len = $cidr -split '/'
+        [uint64]$start = 0
+        foreach ($byte in ([System.Net.IPAddress]::Parse($addr)).GetAddressBytes())
+        {
+            $start = $start * 256 + $byte
+        }
+        [uint64]$size = [math]::Pow(2, 32 - [int]$len)
+        $start -= $start % $size
+        , @($start, ($start + $size - 1))
+    }
+
+    return $ranges[0][0] -le $ranges[1][1] -and $ranges[1][0] -le $ranges[0][1]
+}
+
+function Assert-NatAvailable
+{
+    foreach ($nat in @(Get-NetNat -ErrorAction SilentlyContinue))
+    {
+        $prefix = $nat.InternalIPInterfaceAddressPrefix
+
+        if ($nat.Name -eq $NatName)
+        {
+            if ($prefix -ne $NatPrefix)
+            {
+                throw "NAT '$NatName' is on $prefix, not $NatPrefix. Remove it and run this again; this script will not change a NAT."
+            }
+        }
+        elseif ($prefix -and $prefix -notmatch ':' -and (Test-CidrOverlap $prefix $NatPrefix))
+        {
+            throw "NAT '$($nat.Name)' ($prefix) overlaps this lab's range $NatPrefix. Remove or renumber it first; this script will not change it."
+        }
+        else
+        {
+            Write-Warning "Another NAT '$($nat.Name)' ($prefix) exists. Microsoft supports only one NAT per host, so running both is unsupported."
+        }
+    }
+
+    # Windows picks the WSL and Default Switch subnets itself, from this same private range.
+    $clash = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.InterfaceAlias -notin $LabAdapterAliases -and (Test-CidrOverlap "$($_.IPAddress)/32" $NatPrefix) } |
+        Select-Object -First 1
+
+    if ($clash)
+    {
+        throw "Adapter '$($clash.InterfaceAlias)' has address $($clash.IPAddress), inside this lab's range $NatPrefix."
+    }
+}
+
 function Assert-Prerequisite
 {
     if (-not (Get-Module -ListAvailable Hyper-V))
@@ -193,11 +252,7 @@ function Assert-Prerequisite
         throw "VM storage location is not available: $vmDriveRoot (from `$VMPath = $VMPath)"
     }
 
-    $nat = Get-NetNat -Name $NatName -ErrorAction SilentlyContinue
-    if (-not $nat -or $nat.InternalIPInterfaceAddressPrefix -ne $NatPrefix)
-    {
-        throw "Expected the shared NAT '$NatName' on $NatPrefix. Set it up from the Debian lab's create-cyclops-vm.ps1 or with New-NetNat; this script will not change a NAT."
-    }
+    Assert-NatAvailable
 }
 
 Assert-Prerequisite
@@ -276,7 +331,33 @@ function Initialize-NetworkSwitch
     }
 }
 
+function Initialize-LabNat
+{
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    if (Get-NetNat -Name $NatName -ErrorAction SilentlyContinue)
+    {
+        Write-Host "NAT '$NatName' ($NatPrefix) already exists." -ForegroundColor Yellow
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($NatName, "Create NAT ($NatPrefix)"))
+    {
+        Write-Host "Creating NAT '$NatName' ($NatPrefix)..." -ForegroundColor Cyan
+        try
+        {
+            New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $NatPrefix -ErrorAction Stop | Out-Null
+        }
+        catch
+        {
+            throw "Windows refused to create NAT '$NatName' ($NatPrefix): $($_.Exception.Message) Microsoft supports only one NAT per host, so another NAT may be blocking it."
+        }
+    }
+}
+
 Initialize-NetworkSwitch
+Initialize-LabNat
 
 # ---------------------------------------------------------------------
 # Rebuild  (ephemeral VMs only): tear down so the create path starts fresh

@@ -90,15 +90,22 @@ out, update the `nixpkgs-stable` URL in `flake.nix`.
 
 | Network          | Host                  | Path                                    |
 | ---------------- | --------------------- | --------------------------------------- |
-| `10.0.3.0/24`    | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
-| `10.0.4.0/24`    | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
+| `172.16.0.0/24`  | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
+| `172.16.1.0/24`  | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
 | TBD              | cyclops (production)  | Physical homelab LAN behind the host    |
 
-The Debian lab uses `10.0.1.0/24` and `10.0.2.0/24`. Both labs reach the internet
-through its `HomelabNAT` on `10.0.0.0/16`, because Windows supports only one NAT
-per host. The scripts here never create, change or remove that NAT, so it must
-already exist. Each host holds the `.1` address of its VM's subnet as the gateway,
-and the VMs use static addresses because internal switches have no DHCP.
+Both VMs reach the internet through `NixHomelabNAT` on `172.16.0.0/16`, which
+`just vm-create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
+`10.0.2.0/24` behind its own `HomelabNAT` on `10.0.0.0/16`, and the scripts here never
+change or remove any NAT. Each host holds the `.1` address of its VM's subnet as the
+gateway, and the VMs use static addresses because internal switches have no DHCP.
+
+Microsoft [supports only one NAT per host](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/setup-nat-network),
+and warns that creating more leaves the system in an unknown state. Running both labs
+is therefore unsupported, and `just vm-create` warns when it finds another NAT. If VM
+networking misbehaves with both in place, check `Get-NetNat` first. `just vm-create`
+also stops if another adapter has an address in `172.16.0.0/16`, because Windows picks
+the WSL and Default Switch subnets from the same private range.
 
 Nothing here changes WSL itself. Its default route already goes through Windows,
 so it needs no routes of its own. `just` uses addresses directly, so it needs no
@@ -157,10 +164,10 @@ in at the VM's console.
    the Nix store:
 
    ```bash
-   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/10.0.4.2 captain@10.0.4.2 passwd
+   ssh -t -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 passwd
    ```
 
-   Use `10.0.3.2` for `dcyclops`. The new password survives deploys, but rebuilding
+   Use `172.16.1.2` for `dcyclops`. The new password survives deploys, but rebuilding
    `dcyclops` resets it, so change it again after each rebuild.
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
