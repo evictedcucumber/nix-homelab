@@ -102,8 +102,9 @@ and the VMs use static addresses because internal switches have no DHCP.
 
 Nothing here changes WSL itself. Its default route already goes through Windows,
 so it needs no routes of its own. `just` uses addresses directly, so it needs no
-SSH config, and it keeps host keys in `.known_hosts` in the repo. Builds only add
-to WSL's Nix store, and every deploy activates on its target.
+SSH config. It keeps host keys in `~/.ssh/known_hosts.d/`, one file per address, and
+never touches `~/.ssh/known_hosts`. Builds only add to WSL's Nix store, and every
+deploy activates on its target.
 
 After a WSL restart, re-run this, because Windows resets forwarding on the WSL
 adapter:
@@ -112,8 +113,9 @@ adapter:
 just vm-forwarding
 ```
 
-Rebuilding `dcyclops` changes its SSH host key, so clear the old one with
-`ssh-keygen -f .known_hosts -R 10.0.3.2`.
+`just` trusts a host's key the first time it connects, and refuses it if it later
+changes. Reinstalling a VM changes its key, so `just vm-create` and `just vm-rebuild`
+remove the old one.
 
 ## Setting up the VMs
 
