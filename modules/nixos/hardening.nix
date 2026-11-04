@@ -248,7 +248,7 @@ in
   };
 
   # V-268097, V-268166. A watch can't load if its parent directory is missing.
-  system.activationScripts.auditWatchDirs.text = "mkdir -p /var/cron/tabs /var/lib/lastlog";
+  system.activationScripts.auditWatchDirs.text = "mkdir -p /var/cron/tabs /var/lib/lastlog /var/log";
 
   # V-268158. Limits new SSH connections per address. Runs before the firewall, because
   # extraInputRules comes after its SSH accept. The STIG's byte limit would hit deploys.
