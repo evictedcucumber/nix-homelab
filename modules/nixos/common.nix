@@ -9,12 +9,15 @@ in
   i18n.defaultLocale = "en_ZA.UTF-8";
   services.xserver.xkb.layout = "za";
   console.useXkbConfig = true;
-  networking.timeServers = map (n: "${toString n}.za.pool.ntp.org") [
-    0
-    1
-    2
-    3
-  ];
+  networking.timeServers = [ "time.cloudflare.com" ];
+  services.chrony = {
+    enable = true;
+    enableNTS = true;
+    # rtcsync can't be used alongside this.
+    enableRTCTrimming = false;
+    makestep.threshold = 1.0;
+    extraConfig = "rtcsync";
+  };
 
   nix = {
     settings = {
