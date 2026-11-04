@@ -33,6 +33,8 @@ in
     };
   };
 
+  networking.domain = "homelab.zezura.cc";
+
   services.openssh = {
     enable = true;
     settings = {

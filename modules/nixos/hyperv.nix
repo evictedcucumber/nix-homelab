@@ -25,7 +25,6 @@
 
   # Internal switches have no DHCP, so each host sets its own address and gateway.
   networking = {
-    domain = "nix.homelab.zezura.cc";
     useDHCP = false;
     usePredictableInterfaceNames = false;
     nameservers = [ "1.1.1.1" ];

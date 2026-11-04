@@ -110,7 +110,7 @@ $ErrorActionPreference = "Stop"
 # Per-VM settings. Ephemeral VMs may be destroyed and recreated with -Rebuild.
 $VMConfigs = @{
     tcyclops = @{
-        Name          = "tcyclops.nix.homelab.zezura.cc"
+        Name          = "[nix] tcyclops.homelab.zezura.cc"
         MemoryStartup = 4GB
         CPUCount      = 2
         VHDSize       = 64GB
@@ -120,7 +120,7 @@ $VMConfigs = @{
         Subnet        = "172.16.0.0/24"
     }
     dcyclops = @{
-        Name          = "dcyclops.nix.homelab.zezura.cc"
+        Name          = "[nix] dcyclops.homelab.zezura.cc"
         MemoryStartup = 4GB
         CPUCount      = 2
         VHDSize       = 64GB
@@ -134,6 +134,15 @@ $VMConfigs = @{
 $VMConfig = $VMConfigs[$VM]
 
 $Name = $VMConfig.Name
+
+# PowerShell reads [ and ] as wildcards, so the VM is always found by exact name with
+# Get-LabVM and passed as an object, and its folder and disk are named without them.
+$StorageName = $Name -replace '[\[\]]', ''
+
+function Get-LabVM
+{
+    Get-VM | Where-Object { $_.Name -eq $Name }
+}
 $Ephemeral = $VMConfig.Ephemeral
 
 $Generation = 2
@@ -153,9 +162,9 @@ $NatPrefix = "172.16.0.0/16"
 $LabAdapterAliases = @("vEthernet (NixHomelab)", "vEthernet (NixHomelabDev)")
 
 $VMPath = "E:\Hyper-V VMs"
-$VMRoot = [System.IO.Path]::GetFullPath((Join-Path $VMPath $Name))
+$VMRoot = [System.IO.Path]::GetFullPath((Join-Path $VMPath $StorageName))
 $VHDDirectory = Join-Path $VMRoot "Virtual Hard Disks"
-$VHDPath = Join-Path $VHDDirectory "$Name.vhdx"
+$VHDPath = Join-Path $VHDDirectory "$StorageName.vhdx"
 $VHDSize = $VMConfig.VHDSize
 $VHDSizeGB = [int]($VHDSize / 1GB)
 
@@ -365,7 +374,7 @@ Initialize-LabNat
 
 if ($Rebuild)
 {
-    $existingVm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+    $existingVm = Get-LabVM
 
     if ($existingVm)
     {
@@ -374,11 +383,11 @@ if ($Rebuild)
             if ($existingVm.State -ne 'Off')
             {
                 Write-Host "Turning off VM '$Name'..." -ForegroundColor Cyan
-                Stop-VM -Name $Name -TurnOff -Force -Confirm:$false
+                Stop-VM -VM (Get-LabVM) -TurnOff -Force -Confirm:$false
             }
 
             Write-Host "Removing VM '$Name'..." -ForegroundColor Cyan
-            Remove-VM -Name $Name -Force -Confirm:$false
+            Remove-VM -VM (Get-LabVM) -Force -Confirm:$false
         }
     }
     else
@@ -429,7 +438,7 @@ if (-not (Test-Path $VHDDirectory))
 # VM Creation / Existence Check
 # ---------------------------------------------------------------------
 
-$currentVm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+$currentVm = Get-LabVM
 $vmIsNew = $false
 
 if (-not $currentVm)
@@ -446,16 +455,17 @@ if (-not $currentVm)
 
         Write-Host "Creating Generation $Generation VM '$Name'..." -ForegroundColor Cyan
 
+        # New-VM adds a folder named after the VM under -Path for its configuration.
         $currentVm = New-VM `
             -Name $Name `
             -Generation $Generation `
-            -Path $VMPath `
+            -Path $VMRoot `
             -MemoryStartupBytes $MemoryStartup `
             -VHDPath $VHDPath `
             -SwitchName $SwitchName
 
         Set-VM `
-            -Name $Name `
+            -VM (Get-LabVM) `
             -SnapshotFileLocation $VMRoot `
             -SmartPagingFilePath $VMRoot
 
@@ -473,7 +483,7 @@ else
 }
 
 # Verify VM exists before proceeding with configuration (e.g. if skipped in WhatIf mode)
-$targetVm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+$targetVm = Get-LabVM
 
 if (-not $targetVm)
 {
@@ -487,7 +497,7 @@ $misplaced = @(
     $targetVm.ConfigurationLocation
     $targetVm.SnapshotFileLocation
     $targetVm.SmartPagingFilePath
-    Get-VMHardDiskDrive -VMName $Name | ForEach-Object { $_.Path }
+    Get-VMHardDiskDrive -VM (Get-LabVM) | ForEach-Object { $_.Path }
 ) | Where-Object {
     $_ -and -not ([System.IO.Path]::GetFullPath($_).TrimEnd('\') + '\').StartsWith($VMRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)
 }
@@ -512,8 +522,8 @@ if ($targetVm.State -ne 'Off')
         if ($PSCmdlet.ShouldProcess($Name, "Stop VM (currently $($targetVm.State)) to apply offline-only configuration"))
         {
             Write-Host "Stopping VM '$Name'..." -ForegroundColor Cyan
-            Stop-VM -Name $Name -TurnOff -Force -Confirm:$false
-            $targetVm = Get-VM -Name $Name
+            Stop-VM -VM (Get-LabVM) -TurnOff -Force -Confirm:$false
+            $targetVm = Get-LabVM
         }
     }
     else
@@ -529,7 +539,7 @@ if ($targetVm.State -ne 'Off')
 if ($PSCmdlet.ShouldProcess($Name, "Configure Memory ($($MemoryStartup / 1GB) GB Static)"))
 {
     Set-VMMemory `
-        -VMName $Name `
+        -VM (Get-LabVM) `
         -DynamicMemoryEnabled $false `
         -StartupBytes $MemoryStartup
 }
@@ -538,14 +548,14 @@ if ($PSCmdlet.ShouldProcess($Name, "Configure Memory ($($MemoryStartup / 1GB) GB
 # CPU & Nested Virtualization
 # ---------------------------------------------------------------------
 
-$proc = Get-VMProcessor -VMName $Name -ErrorAction SilentlyContinue
+$proc = Get-VMProcessor -VM (Get-LabVM) -ErrorAction SilentlyContinue
 
 if (-not $proc -or $proc.Count -ne $CPUCount -or -not $proc.ExposeVirtualizationExtensions)
 {
     if ($PSCmdlet.ShouldProcess($Name, "Configure CPU ($CPUCount vCPUs, Enable Nested Virtualization)"))
     {
         Set-VMProcessor `
-            -VMName $Name `
+            -VM (Get-LabVM) `
             -Count $CPUCount `
             -ExposeVirtualizationExtensions $true
     }
@@ -558,7 +568,7 @@ if (-not $proc -or $proc.Count -ne $CPUCount -or -not $proc.ExposeVirtualization
 if ($PSCmdlet.ShouldProcess($Name, "Configure VM options & disable automatic checkpoints"))
 {
     Set-VM `
-        -Name $Name `
+        -VM (Get-LabVM) `
         -AutomaticCheckpointsEnabled $false `
         -AutomaticStartAction StartIfRunning `
         -AutomaticStopAction ShutDown `
@@ -569,7 +579,7 @@ if ($PSCmdlet.ShouldProcess($Name, "Configure VM options & disable automatic che
 # Guest Integration Services
 # ---------------------------------------------------------------------
 
-$disabledServices = Get-VMIntegrationService -VMName $Name -ErrorAction SilentlyContinue | Where-Object { -not $_.Enabled }
+$disabledServices = Get-VMIntegrationService -VM (Get-LabVM) -ErrorAction SilentlyContinue | Where-Object { -not $_.Enabled }
 
 if ($disabledServices)
 {
@@ -577,7 +587,7 @@ if ($disabledServices)
     {
         if ($PSCmdlet.ShouldProcess($Name, "Enable Integration Service '$($service.Name)'"))
         {
-            Enable-VMIntegrationService -VMName $Name -Name $service.Name
+            Enable-VMIntegrationService -VM (Get-LabVM) -Name $service.Name
         }
     }
 }
@@ -590,13 +600,13 @@ $applyIso = $vmIsNew -or $Reinstall -or $Rebuild
 
 if ($applyIso)
 {
-    $dvd = Get-VMDvdDrive -VMName $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+    $dvd = Get-VMDvdDrive -VM (Get-LabVM) -ErrorAction SilentlyContinue | Select-Object -First 1
 
     if (-not $dvd)
     {
         if ($PSCmdlet.ShouldProcess($Name, "Add DVD drive with ISO '$IsoPath'"))
         {
-            $dvd = Add-VMDvdDrive -VMName $Name -Path $IsoPath -Passthru
+            $dvd = Add-VMDvdDrive -VM (Get-LabVM) -Path $IsoPath -Passthru
         }
     }
     elseif ($dvd.Path -ne $IsoPath)
@@ -604,15 +614,13 @@ if ($applyIso)
         if ($PSCmdlet.ShouldProcess($Name, "Set DVD drive ISO to '$IsoPath'"))
         {
             Set-VMDvdDrive `
-                -VMName $Name `
-                -ControllerNumber $dvd.ControllerNumber `
-                -ControllerLocation $dvd.ControllerLocation `
+                -VMDvdDrive $dvd `
                 -Path $IsoPath
         }
     }
 
-    $dvdDrive = Get-VMDvdDrive -VMName $Name -ErrorAction SilentlyContinue | Select-Object -First 1
-    $diskDrive = Get-VMHardDiskDrive -VMName $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+    $dvdDrive = Get-VMDvdDrive -VM (Get-LabVM) -ErrorAction SilentlyContinue | Select-Object -First 1
+    $diskDrive = Get-VMHardDiskDrive -VM (Get-LabVM) -ErrorAction SilentlyContinue | Select-Object -First 1
 
     # The ISO boots straight into the unattended installer, and Hyper-V
     # ignores the installer's eject, so a DVD-first VM would reinstall on
@@ -625,18 +633,18 @@ if ($applyIso)
     {
         if ($dvdDrive -and $PSCmdlet.ShouldProcess($Name, "Set first boot device to DVD drive"))
         {
-            Set-VMFirmware -VMName $Name -FirstBootDevice $dvdDrive
+            Set-VMFirmware -VM (Get-LabVM) -FirstBootDevice $dvdDrive
         }
     }
     elseif ($dvdDrive -and $diskDrive)
     {
         if ($PSCmdlet.ShouldProcess($Name, "Set boot order: hard disk, DVD drive, then the rest"))
         {
-            $rest = @((Get-VMFirmware -VMName $Name).BootOrder | Where-Object {
+            $rest = @((Get-VMFirmware -VM (Get-LabVM)).BootOrder | Where-Object {
                     $_.Device -and $_.Device.Id -ne $diskDrive.Id -and $_.Device.Id -ne $dvdDrive.Id
                 } | ForEach-Object { $_.Device })
 
-            Set-VMFirmware -VMName $Name -BootOrder (@($diskDrive, $dvdDrive) + $rest)
+            Set-VMFirmware -VM (Get-LabVM) -BootOrder (@($diskDrive, $dvdDrive) + $rest)
         }
     }
 }
@@ -652,7 +660,7 @@ else
 if ($PSCmdlet.ShouldProcess($Name, "Disable Secure Boot"))
 {
     Set-VMFirmware `
-        -VMName $Name `
+        -VM (Get-LabVM) `
         -EnableSecureBoot Off
 }
 
@@ -662,15 +670,15 @@ if ($PSCmdlet.ShouldProcess($Name, "Disable Secure Boot"))
 
 if ($EnableTPM)
 {
-    $vmSecurity = Get-VMSecurity -VMName $Name -ErrorAction SilentlyContinue
+    $vmSecurity = Get-VMSecurity -VM (Get-LabVM) -ErrorAction SilentlyContinue
 
     if (-not $vmSecurity -or -not $vmSecurity.TpmEnabled)
     {
         if ($PSCmdlet.ShouldProcess($Name, "Enable Virtual TPM"))
         {
             Write-Host "Enabling Virtual TPM for '$Name'..." -ForegroundColor Cyan
-            Set-VMKeyProtector -VMName $Name -NewLocalKeyProtector
-            Enable-VMTPM -VMName $Name
+            Set-VMKeyProtector -VM (Get-LabVM) -NewLocalKeyProtector
+            Enable-VMTPM -VM (Get-LabVM)
         }
     }
 }
@@ -679,14 +687,14 @@ if ($EnableTPM)
 # Ensure Correct Switch
 # ---------------------------------------------------------------------
 
-$adapter = Get-VMNetworkAdapter -VMName $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+$adapter = Get-VMNetworkAdapter -VM (Get-LabVM) -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($adapter -and $adapter.SwitchName -ne $SwitchName)
 {
     if ($PSCmdlet.ShouldProcess($Name, "Connect network adapter to switch '$SwitchName'"))
     {
         Connect-VMNetworkAdapter `
-            -VMName $Name `
+            -VMNetworkAdapter $adapter `
             -SwitchName $SwitchName
     }
 }
@@ -698,14 +706,14 @@ if ($adapter -and $adapter.SwitchName -ne $SwitchName)
 if ($applyIso)
 {
     $checkpointName = "pre-os-install"
-    $snapshot = Get-VMSnapshot -VMName $Name -Name $checkpointName -ErrorAction SilentlyContinue
+    $snapshot = Get-VMSnapshot -VM (Get-LabVM) -Name $checkpointName -ErrorAction SilentlyContinue
 
     if (-not $snapshot)
     {
         if ($PSCmdlet.ShouldProcess($Name, "Create checkpoint '$checkpointName'"))
         {
             Write-Host "Creating checkpoint '$checkpointName'..." -ForegroundColor Cyan
-            Checkpoint-VM -Name $Name -SnapshotName $checkpointName
+            Checkpoint-VM -VM (Get-LabVM) -SnapshotName $checkpointName
         }
     }
     else
@@ -721,9 +729,9 @@ if ($applyIso)
 if (-not $WhatIfPreference)
 {
     $problems = @(
-        if ((Get-VM -Name $Name).Generation -ne $Generation) { "not Generation $Generation" }
-        if (-not (Get-VMProcessor -VMName $Name).ExposeVirtualizationExtensions) { "nested virtualization is off" }
-        Get-VMIntegrationService -VMName $Name | Where-Object { -not $_.Enabled } | ForEach-Object { "integration service '$($_.Name)' is off" }
+        if ((Get-LabVM).Generation -ne $Generation) { "not Generation $Generation" }
+        if (-not (Get-VMProcessor -VM (Get-LabVM)).ExposeVirtualizationExtensions) { "nested virtualization is off" }
+        Get-VMIntegrationService -VM (Get-LabVM) | Where-Object { -not $_.Enabled } | ForEach-Object { "integration service '$($_.Name)' is off" }
     )
 
     if ($problems)
@@ -741,7 +749,7 @@ Write-Host "=====================================" -ForegroundColor Green
 Write-Host "VM Configuration Summary" -ForegroundColor Green
 Write-Host "=====================================" -ForegroundColor Green
 
-Get-VM -Name $Name |
+Get-LabVM |
     Select-Object `
         Name,
         State,
@@ -757,19 +765,19 @@ Get-VM -Name $Name |
         SmartPagingFilePath |
     Format-List
 
-Get-VMProcessor -VMName $Name |
+Get-VMProcessor -VM (Get-LabVM) |
     Select-Object Count, ExposeVirtualizationExtensions |
     Format-List
 
-Get-VMSecurity -VMName $Name |
+Get-VMSecurity -VM (Get-LabVM) |
     Select-Object TpmEnabled |
     Format-List
 
-Get-VMIntegrationService -VMName $Name |
+Get-VMIntegrationService -VM (Get-LabVM) |
     Select-Object Name, Enabled |
     Format-Table -AutoSize
 
-Get-VMSnapshot -VMName $Name |
+Get-VMSnapshot -VM (Get-LabVM) |
     Select-Object Name, CreationTime |
     Format-Table -AutoSize
 
@@ -779,7 +787,7 @@ Get-VMSnapshot -VMName $Name |
 
 if ($Start)
 {
-    $startVm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+    $startVm = Get-LabVM
 
     if ($startVm -and $startVm.State -eq 'Running')
     {
@@ -788,6 +796,6 @@ if ($Start)
     elseif ($PSCmdlet.ShouldProcess($Name, "Start VM"))
     {
         Write-Host "Starting VM '$Name'..." -ForegroundColor Cyan
-        Start-VM -Name $Name
+        Start-VM -VM (Get-LabVM)
     }
 }

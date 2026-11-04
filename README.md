@@ -9,12 +9,12 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from WSL.
 | `dcyclops` | Hyper-V VM on the WSL PC | Throwaway dev VM, rebuilt whenever needed  |
 
 These VMs mirror the Debian `tcyclops` and `dcyclops` from the `homelab` repo and
-run alongside them. Only the short host names match:
+run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names differ:
 
-| Debian lab                   | This repo                        |
-| ---------------------------- | -------------------------------- |
-| `tcyclops.homelab.zezura.cc` | `tcyclops.nix.homelab.zezura.cc` |
-| `dcyclops.homelab.zezura.cc` | `dcyclops.nix.homelab.zezura.cc` |
+| Debian VM name               | Nix VM name                        |
+| ---------------------------- | ---------------------------------- |
+| `tcyclops.homelab.zezura.cc` | `[nix] tcyclops.homelab.zezura.cc` |
+| `dcyclops.homelab.zezura.cc` | `[nix] dcyclops.homelab.zezura.cc` |
 
 ## Layout
 
@@ -158,7 +158,9 @@ in at the VM's console.
 
    The ISO goes in your Windows Downloads folder. The VM's disks, configuration and
    checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script stops if
-   an existing VM has any of them elsewhere.
+   an existing VM has any of them elsewhere. The folder is the VM's name without the
+   brackets, such as `nix tcyclops.homelab.zezura.cc`, because PowerShell reads
+   brackets as wildcards.
    To put the ISO elsewhere on a Windows drive, run
    `just iso_dir=/mnt/e/isos vm-create tcyclops`. Pass
    `-Force` or `-Reinstall` after the VM name to use those script options.
