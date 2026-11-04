@@ -85,8 +85,9 @@ one package from `nixos-26.05` instead:
 environment.systemPackages = [ pkgs.stable.somePackage ];
 ```
 
-Stable is only evaluated when something uses it. When a new NixOS release comes
-out, update the `nixpkgs-stable` URL in `flake.nix`.
+Stable is only evaluated when something uses it. It stays on 26.05 because
+`nixos-26.11` has no branch yet. When a new NixOS release comes out, update the
+`nixpkgs-stable` URL in `flake.nix`.
 
 ## Networking
 
