@@ -70,7 +70,9 @@ just deploy tcyclops
 just deploy cyclops captain@<address>
 ```
 
-Deploys ask for `captain`'s sudo password on the target.
+Deploys ask for `captain`'s sudo password on the target. Everything is built in WSL
+and pushed over SSH. The hosts set `max-jobs = 0`, so any build started on one fails,
+including `nixos-rebuild` or `nix-shell` run there.
 
 The pre-commit hook checks the staged files with the same formatters and linters
 as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a

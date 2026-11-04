@@ -25,6 +25,8 @@ in
       auto-optimise-store = true;
       # Lets `nixos-rebuild --target-host` copy locally built, unsigned closures.
       trusted-users = [ "@wheel" ];
+      # Hosts never build. WSL builds everything, and deploys push it here.
+      max-jobs = 0;
     };
     gc = {
       automatic = true;
