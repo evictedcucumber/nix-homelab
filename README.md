@@ -151,6 +151,10 @@ SSH only accepts public keys, and only for `captain`. Keys must be set in
 and tunnels are off, so `ssh -L`, `-R`, `-D` and `-A` won't work. To give `riley` SSH
 access, add a key for that user and add `riley` to `AllowUsers`.
 
+`modules/nixos/hardening.nix` applies the parts of the Anduril NixOS STIG chosen for this
+homelab, mainly `auditd` and its rules. Only `root` and `wheel` can use Nix, so `riley`
+can't. `stig-audit.md` lists every finding and why it was adopted or skipped.
+
 ## Setting up the VMs
 
 Do this once per VM. The ISO installs the SSH key from

@@ -41,6 +41,7 @@
             }
             disko.nixosModules.disko
             ./modules/nixos/common.nix
+            ./modules/nixos/hardening.nix
             ./hosts/${name}/configuration.nix
           ];
         };
