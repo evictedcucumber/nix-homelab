@@ -190,12 +190,69 @@ Nix daemon. An activation step that writes to the store, such as a custom
 `modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
 outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
-and hosts don't answer ping.
+and hosts don't answer ping. A host can also connect to its own [containers](#containers).
 
 DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
 to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
 plain DNS fallback, and the firewall blocks port 53. `chrony` uses
 `time.cloudflare.com` over NTS.
+
+## Containers
+
+`modules/nixos/containers.nix` sets up
+[NixOS containers](https://nixos.org/manual/nixos/stable/#ch-containers). Nothing changes
+on a host until it declares one in its `configuration.nix`, which only needs a unique
+address in `10.233.0.0/24` (the host is `10.233.0.1`) and a name of up to 11 characters:
+
+```nix
+containers.web = {
+  localAddress = "10.233.0.2";
+  config = {
+    services.nginx.enable = true;
+    networking.firewall.allowedTCPPorts = [ 80 ];
+  };
+};
+```
+
+The host's modules don't apply inside a container, so the hardening and SSH settings stop
+at the host. Open a shell in one from the host:
+
+```bash
+sudo nixos-container root-login web
+```
+
+Each container has its own firewall, inside the container, which drops everything in and
+out, including DNS. Outbound traffic has to pass both that firewall and the host's, so
+allowing something on one side changes nothing until the other allows it too:
+
+| To allow             | In the container's `config`                                  | On the host                                                        |
+| -------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| DNS                  | `containerFirewall.allowDns = true;`                         | Nothing, this opens it there too                                   |
+| Outbound connections | `containerFirewall.extraOutputRules = "tcp dport 443 accept";` | `networking.firewall.extraForwardRules = ''iifname "ve-web" tcp dport 443 accept'';` |
+| Inbound from the host | `networking.firewall.allowedTCPPorts = [ 80 ];`              | Nothing, the host can connect to its containers                    |
+
+Root in a container can flush that container's firewall, so treat it as policy for what
+the container should do, and the host's rules as the limit on a compromised one. The host
+always blocks the rest:
+
+- A container's root isn't root on the host, and the host's Nix daemon refuses it.
+- A container can't reach other containers, including through their `forwardPorts`, or
+  forge its source address.
+- A container that hasn't enabled DNS can't reach any port on the host. One that has can
+  only reach port 53, and its lookups go over TLS. They do leave the host, so a
+  compromised container could still smuggle data out through them.
+
+A host rule like the one in the table also reaches the LAN. Add an `ip daddr` match to
+limit it. Assertions stop a host from turning off `privateNetwork` or `privateUsers`, or
+giving a container other network interfaces or extra capabilities.
+
+A directory shared with `bindMounts` shows up as unowned, so share a writable one with
+`extraFlags = [ "--bind=/host/path:/container/path:idmap" ]` instead.
+
+`forwardPorts` publishes a container's port on every host interface, without an
+`allowedTCPPorts` entry on the host, though the container's firewall must still allow it.
+Containers are declarative only: `nixos-container create` needs a build, and hosts don't
+build.
 
 ## Setting up the VMs
 

@@ -48,6 +48,7 @@
             disko.nixosModules.disko
             home-manager.nixosModules.home-manager
             ./modules/nixos/common.nix
+            ./modules/nixos/containers.nix
             ./modules/nixos/dns.nix
             ./modules/nixos/firewall.nix
             ./modules/nixos/hardening.nix
