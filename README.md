@@ -50,6 +50,7 @@ Run `just` to list the recipes:
 | `just build <host>`                    | Build a host's system without activating it  |
 | `just deploy <host> [target]`          | Build in WSL and activate on the host        |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
+| `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
 | `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it   |
 | `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO           |

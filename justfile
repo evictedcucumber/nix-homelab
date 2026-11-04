@@ -48,6 +48,10 @@ deploy host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyc
 deploy-test host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir
     nixos-rebuild test --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
 
+# Reboot the host, which also drops a deploy-test
+reboot host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): _known-hosts-dir
+    ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo systemctl reboot
+
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
 iso host out=iso_dir:
     nix build .#{{ host }}-iso --out-link result-{{ host }}-iso
