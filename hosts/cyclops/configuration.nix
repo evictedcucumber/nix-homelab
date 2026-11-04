@@ -5,5 +5,5 @@
   boot.loader.efi.canTouchEfiVariables = false;
 
   # Set to the NixOS release first installed on this host, then never change it.
-  system.stateVersion = "26.05";
+  system.stateVersion = "26.11";
 }
