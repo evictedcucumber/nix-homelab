@@ -104,7 +104,7 @@ Stable is only evaluated when something uses it. It stays on 26.05 because
 | `172.16.1.0/24`  | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
 | TBD              | cyclops (production)  | Physical homelab LAN behind the host    |
 
-Both VMs reach the internet through `NixHomelabNAT` on `172.16.0.0/16`, which
+Both VMs sit behind `NixHomelabNAT` on `172.16.0.0/16`, which
 `just vm-create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
 `10.0.2.0/24` behind its own `HomelabNAT` on `10.0.0.0/16`, and the scripts here never
 change or remove any NAT. Each host holds the `.1` address of its VM's subnet as the
@@ -154,6 +154,16 @@ access, add a key for that user and add `riley` to `AllowUsers`.
 `modules/nixos/hardening.nix` applies the parts of the Anduril NixOS STIG chosen for this
 homelab, mainly `auditd` and its rules. Only `root` and `wheel` can use Nix, so `riley`
 can't. `stig-audit.md` lists every finding and why it was adopted or skipped.
+
+`modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
+and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
+outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
+and hosts don't answer ping.
+
+DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
+to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
+plain DNS fallback, and the firewall blocks port 53. `chrony` uses
+`time.cloudflare.com` over NTS.
 
 ## Setting up the VMs
 
