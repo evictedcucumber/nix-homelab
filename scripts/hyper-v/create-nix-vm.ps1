@@ -66,10 +66,6 @@
 .PARAMETER Start
     Start the VM after it has been configured, if it is not already running.
 
-.PARAMETER EnableGuestServiceInterface
-    Also enable the "Guest Service Interface" integration service (host to
-    guest file copy). Left disabled by default.
-
 .EXAMPLE
     .\create-nix-vm.ps1 -VM tcyclops -IsoPath E:\isos\tcyclops-nix-auto.iso
 
@@ -100,9 +96,7 @@ param(
 
     [switch]$Rebuild,
 
-    [switch]$Start,
-
-    [switch]$EnableGuestServiceInterface
+    [switch]$Start
 )
 
 $ErrorActionPreference = "Stop"
@@ -494,9 +488,7 @@ if ($PSCmdlet.ShouldProcess($Name, "Configure VM options & disable automatic che
 # Guest Integration Services
 # ---------------------------------------------------------------------
 
-$disabledServices = Get-VMIntegrationService -VMName $Name -ErrorAction SilentlyContinue | Where-Object {
-    (-not $_.Enabled) -and ($EnableGuestServiceInterface -or $_.Name -ne 'Guest Service Interface')
-}
+$disabledServices = Get-VMIntegrationService -VMName $Name -ErrorAction SilentlyContinue | Where-Object { -not $_.Enabled }
 
 if ($disabledServices)
 {
@@ -638,6 +630,24 @@ if ($applyIso)
     else
     {
         Write-Host "Checkpoint '$checkpointName' already exists." -ForegroundColor Yellow
+    }
+}
+
+# ---------------------------------------------------------------------
+# Verify Required Features
+# ---------------------------------------------------------------------
+
+if (-not $WhatIfPreference)
+{
+    $problems = @(
+        if ((Get-VM -Name $Name).Generation -ne $Generation) { "not Generation $Generation" }
+        if (-not (Get-VMProcessor -VMName $Name).ExposeVirtualizationExtensions) { "nested virtualization is off" }
+        Get-VMIntegrationService -VMName $Name | Where-Object { -not $_.Enabled } | ForEach-Object { "integration service '$($_.Name)' is off" }
+    )
+
+    if ($problems)
+    {
+        throw "VM '$Name' is not configured as required: $($problems -join '; ')"
     }
 }
 

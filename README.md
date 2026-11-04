@@ -128,6 +128,10 @@ SSH logins are disabled.
    just vm-create tcyclops
    ```
 
+   Each VM is Generation 2, with nested virtualization and every integration
+   service on, and the guest runs the Hyper-V daemons. The script stops if any of
+   that isn't in place.
+
    The ISO goes in your Windows Downloads folder. The VM's disks, configuration and
    checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script stops if
    an existing VM has any of them elsewhere.

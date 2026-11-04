@@ -4,6 +4,19 @@
   virtualisation.hypervGuest.enable = true;
   nixpkgs.hostPlatform = "x86_64-linux";
 
+  # kvm-amd gives nested VMs /dev/kvm on this Ryzen host. uio_hv_generic is the
+  # driver behind the Guest Service Interface, which hv-fcopy uses.
+  boot.kernelModules = [
+    "kvm-amd"
+    "uio_hv_generic"
+  ];
+
+  # nixpkgs prefixes this condition with /dev/vmbus/, so hv-fcopy never starts.
+  systemd.services.hv-fcopy.unitConfig.ConditionPathExists = [
+    ""
+    "/sys/bus/vmbus/devices/eb765408-105f-49b6-b4aa-c123b64d17d4/uio"
+  ];
+
   boot.loader = {
     systemd-boot.enable = true;
     # Puts the installed system ahead of the DVD in the firmware's boot order.
