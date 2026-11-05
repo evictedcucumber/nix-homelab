@@ -1,4 +1,5 @@
 # Defaults for `containers.<name>`. Each container only needs a `localAddress` and its `config`.
+# Name a container after its service, which also becomes its hostname.
 # A veth per container, not a bridge, so traffic between containers crosses the host's
 # default-deny forward chain. Takes effect on a host once it declares a container.
 { config, lib, ... }:
@@ -42,6 +43,8 @@ in
             ];
 
             networking = {
+              # With the hostName NixOS sets from the attribute name, this makes <service>.<domain>.
+              inherit (config.networking) domain;
               enableIPv6 = false;
               nameservers = [ hostAddress ];
               # The host's resolv.conf points at its own loopback.

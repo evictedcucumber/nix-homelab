@@ -206,7 +206,9 @@ plain DNS fallback, and the firewall blocks outbound port 53. `chrony` uses
 `modules/nixos/containers.nix` sets up
 [NixOS containers](https://nixos.org/manual/nixos/stable/#ch-containers). Nothing changes
 on a host until it declares one in its `configuration.nix`, which only needs a unique
-address in `10.233.0.0/24` (the host is `10.233.0.1`) and a name of up to 11 characters:
+address in `10.233.0.0/24` (the host is `10.233.0.1`) and a name of up to 11 characters.
+Name it after its service: the name is also its hostname, under the host's domain, so
+the one below is `web.homelab.zezura.cc` inside the container.
 
 ```nix
 containers.web = {
