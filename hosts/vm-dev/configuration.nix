@@ -17,6 +17,12 @@
 
   users.users.root.hashedPassword = "";
 
+  # `nix shell nixpkgs#<package>`, with nixpkgs pinned to this flake's version.
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
+
   # LightDM's autologin refuses root, so a console login starts the desktop instead.
   services.getty.autologinUser = "root";
   environment.loginShellInit = ''
