@@ -1,5 +1,24 @@
 {
   "nodes": {
+    "blocklist": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793508697,
+        "lfs": true,
+        "narHash": "sha256-BL3X8s6fxNNmY1lgd24xL/W7c3U9+QXGmzJvHwa6UqM=",
+        "ref": "refs/heads/main",
+        "rev": "45348bb0798fc1567dcc53cf59a822b0d2989573",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/zachlagden/Pi-hole-Optimized-Blocklists"
+      },
+      "original": {
+        "lfs": true,
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/zachlagden/Pi-hole-Optimized-Blocklists"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -74,6 +93,7 @@
     },
     "root": {
       "inputs": {
+        "blocklist": "blocklist",
         "disko": "disko",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",

@@ -303,8 +303,18 @@ still talk to it in plain DNS, and only from private addresses (`10.0.0.0/8`,
 `172.16.0.0/12` and `192.168.0.0/16`). The host itself keeps using `dnsdist` directly, and
 other containers can't reach Pi-hole.
 
-It has no blocklists yet, and blocks nothing: the container needs outbound HTTPS to
-download lists for `services.pihole-ftl.lists`.
+It blocks the domains in
+[Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists),
+answering `0.0.0.0`. It uses `all_domains.txt`, the largest list, which leaves out adult
+sites but can block some legitimate domains. Hosts can't download lists, so the list is a
+flake input and arrives with each deploy. It stays as it is until you update it:
+
+```bash
+just update blocklist
+```
+
+Then run `just deploy <host>`, which reloads it. Lists added in the web interface can't be
+downloaded either, for the same reason.
 
 ## Setting up the VMs
 
