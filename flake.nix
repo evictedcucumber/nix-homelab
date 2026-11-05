@@ -114,6 +114,12 @@
 
       packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso (vmHosts ++ [ "vm-dev" ]));
 
+      # Not checks, because `nix flake check` would then need uid-range. `just test` runs these.
+      legacyPackages.x86_64-linux.tests = import ./tests {
+        inherit blocklist hostModules;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
+
       overlays.stable = final: _: {
         stable = import nixpkgs-stable {
           inherit (final.stdenv.hostPlatform) system;
