@@ -379,6 +379,12 @@ name lookups fail unless `dcyclops` is running. It has no SSH and isn't managed 
 Add a tool for the current shell with `nix shell nixpkgs#<package>`. Packages download
 through Pi-hole's DNS, and go when the VM does.
 
+To stress test DNS with the sample queries, which are in root's home directory:
+
+```bash
+nix shell nixpkgs#dnsperf -c dnsperf -d ~/tests/dns/queries.txt -s 172.16.1.3 -l 30 -c 10
+```
+
 To turn it off and delete it, with its folder under `E:\Hyper-V VMs` and its ISO:
 
 ```bash
