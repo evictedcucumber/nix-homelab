@@ -85,7 +85,7 @@ Sorted by severity (CAT), then ID.
 | V-268105 | II | The NixOS audit system must take appropriate action when the audit storage volume is full. | Implemented | Test | Choose `SYSLOG`, which the STIG allows. Its example, `HALT`, stops the server when the audit disk fills. |
 | V-268106 | II | The NixOS audit system must take appropriate action when an audit processing failure occurs. | Implemented | Test | Choose `SYSLOG`, for the same reason as V-268105. |
 | V-268107 | II | Have the packages required for offloading audit logs installed and running. | Implemented | Test | `services.journald.settings.Journal.Audit = true`. Check how it behaves alongside auditd. |
-| V-268108 | II | The NixOS audit records must be off-loaded onto a different system or storage media from the… | Gap | Skip | Needs a separate log server, and the repo has none. Revisit if you add one. |
+| V-268108 | II | The NixOS audit records must be off-loaded onto a different system or storage media from the… | Gap | Skip | Loki runs on the same host, so root can still erase the records. Needs a log server on a different system. |
 | V-268109 | II | Authenticate the remote logging server for off-loading audit logs. | Gap | Skip | Depends on V-268108. |
 | V-268110 | II | NixOS audit daemon must generate logs that are group-owned by root. | Implemented | Test | Set `log_group = root` in `security.auditd.settings`. |
 | V-268111 | II | NixOS audit directory and logs must be owned by root to prevent unauthorized read access. | Host check | Check | Only exists once auditd is running. |
