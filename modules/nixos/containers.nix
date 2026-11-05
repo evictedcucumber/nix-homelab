@@ -39,8 +39,11 @@ in
           config = {
             imports = [
               ./container-firewall.nix
+              ./log-retention.nix
               ./minimal.nix
             ];
+
+            services.journald.settings.Journal.SystemMaxUse = "256M";
 
             networking = {
               # With the hostName NixOS sets from the attribute name, this makes <service>.<domain>.

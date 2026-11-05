@@ -82,6 +82,12 @@ in
               };
             };
 
+            # Nixpkgs rotates these by date only, and pihole.log gets a line per query.
+            services.logrotate.settings = {
+              pihole-dnsmasq.maxsize = "100M";
+              pihole-ftl.maxsize = "50M";
+            };
+
             # As a oneshot this holds up the container's boot, but it needs DNS, and the host only
             # sets up its side of the network after boot. Lists also fail to load while DNS is down.
             systemd.services.pihole-ftl-setup = {
