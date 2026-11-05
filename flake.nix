@@ -59,6 +59,15 @@
           ];
         };
 
+      # Not a managed server, so it leaves out the modules every host shares.
+      vmDev = nixpkgs.lib.nixosSystem {
+        modules = [
+          { networking.hostName = "vm-dev"; }
+          disko.nixosModules.disko
+          ./hosts/vm-dev/configuration.nix
+        ];
+      };
+
       mkInstallerIso =
         name:
         let
@@ -88,9 +97,11 @@
         );
     in
     {
-      nixosConfigurations = nixpkgs.lib.genAttrs ([ "cyclops" ] ++ vmHosts) mkHost;
+      nixosConfigurations = nixpkgs.lib.genAttrs ([ "cyclops" ] ++ vmHosts) mkHost // {
+        vm-dev = vmDev;
+      };
 
-      packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso vmHosts);
+      packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso (vmHosts ++ [ "vm-dev" ]));
 
       overlays.stable = final: _: {
         stable = import nixpkgs-stable {
