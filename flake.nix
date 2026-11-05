@@ -44,28 +44,30 @@
         "tcyclops"
       ];
 
+      hostModules = name: [
+        {
+          networking.hostName = name;
+          nixpkgs.overlays = [ self.overlays.stable ];
+        }
+        disko.nixosModules.disko
+        home-manager.nixosModules.home-manager
+        ./modules/nixos/common.nix
+        ./modules/nixos/containers.nix
+        ./modules/nixos/dns.nix
+        ./modules/nixos/firewall.nix
+        ./modules/nixos/hardening.nix
+        ./modules/nixos/home-manager.nix
+        ./modules/nixos/logging.nix
+        ./modules/nixos/minimal.nix
+        ./modules/nixos/pihole.nix
+        ./hosts/${name}/configuration.nix
+      ];
+
       mkHost =
         name:
         nixpkgs.lib.nixosSystem {
           specialArgs = { inherit blocklist; };
-          modules = [
-            {
-              networking.hostName = name;
-              nixpkgs.overlays = [ self.overlays.stable ];
-            }
-            disko.nixosModules.disko
-            home-manager.nixosModules.home-manager
-            ./modules/nixos/common.nix
-            ./modules/nixos/containers.nix
-            ./modules/nixos/dns.nix
-            ./modules/nixos/firewall.nix
-            ./modules/nixos/hardening.nix
-            ./modules/nixos/home-manager.nix
-            ./modules/nixos/logging.nix
-            ./modules/nixos/minimal.nix
-            ./modules/nixos/pihole.nix
-            ./hosts/${name}/configuration.nix
-          ];
+          modules = hostModules name;
         };
 
       # Not a managed server, so it leaves out the modules every host shares.
