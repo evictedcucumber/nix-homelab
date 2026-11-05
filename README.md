@@ -322,7 +322,7 @@ downloaded either, for the same reason.
 ## Logging
 
 `modules/nixos/logging.nix` runs Grafana and Loki on every host, in one container named
-`logging` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the host
+`grafana` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the host
 and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
 and every service's output, and each line is labelled with the host, `unit`, `identifier`,
 `transport` and `level`.
@@ -338,7 +338,7 @@ the key that signs sessions are generated when Grafana first starts, and stay ou
 store. Read the password on the host:
 
 ```bash
-sudo cat /var/lib/nixos-containers/logging/var/lib/grafana/admin-password
+sudo cat /var/lib/nixos-containers/grafana/var/lib/grafana/admin-password
 ```
 
 Loki is already the default data source, and the Host logs dashboard shows failed SSH
@@ -350,7 +350,7 @@ so changes made in the interface don't last. To read logs, use Explore with a qu
 ```
 
 Loki keeps logs for 30 days. Nothing limits its size, only age, so check the disk if a
-service gets noisy. It's in `/var/lib/nixos-containers/logging/var/lib/loki`.
+service gets noisy. It's in `/var/lib/nixos-containers/grafana/var/lib/loki`.
 
 Loki has no login, so a firewall rule on the host drops connections to its port 3100 from
 every user except `root` and `alloy` (UID 399). Alloy keeps its place in the journal in
@@ -363,7 +363,7 @@ anything that wipes the host takes them too. Check it from the host:
 
 ```bash
 sudo journalctl -u alloy
-sudo nixos-container run logging -- journalctl -u loki -u grafana
+sudo nixos-container run grafana -- journalctl -u loki -u grafana
 ```
 
 ## Setting up the VMs

@@ -79,7 +79,7 @@ in
 
   config = lib.mkMerge [
     {
-      containers.logging = {
+      containers.grafana = {
         localAddress = address;
         config =
           { config, pkgs, ... }:
@@ -227,8 +227,8 @@ in
               }
               if ! certificate_valid; then
                 ${openssl} req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
-                  -subj /CN=logging -keyout ${tlsKey} -out ${tlsCert} \
-                  -addext "subjectAltName=DNS:logging,DNS:localhost,IP:127.0.0.1,IP:${address}${
+                  -subj /CN=grafana -keyout ${tlsKey} -out ${tlsCert} \
+                  -addext "subjectAltName=DNS:grafana,DNS:localhost,IP:127.0.0.1,IP:${address}${
                     lib.optionalString (lanAddress != null) ",IP:${lanAddress}"
                   }"
               fi
@@ -237,7 +237,7 @@ in
       };
 
       # A clean exit inside the container counts as success, so on-failure wouldn't restart it.
-      systemd.services."container@logging" = {
+      systemd.services."container@grafana" = {
         startLimitIntervalSec = 0;
         serviceConfig = {
           Restart = lib.mkForce "always";
