@@ -1,5 +1,6 @@
 # Shared by the Generation 2 Hyper-V VMs. Their disk layout and hardware are
 # fixed, so they need no generated hardware config.
+{ lib, ... }:
 {
   virtualisation.hypervGuest.enable = true;
   nixpkgs.hostPlatform = "x86_64-linux";
@@ -45,16 +46,61 @@
             mountOptions = [ "umask=0077" ];
           };
         };
-        root = {
+        lvm = {
           size = "100%";
           content = {
-            type = "filesystem";
-            format = "ext4";
-            mountpoint = "/";
+            type = "lvm_pv";
+            vg = "vg0";
           };
         };
       };
     };
+  };
+
+  # Sizes are shares of the VG because VM disks differ. The remaining 10% stays
+  # unassigned for growing a volume later. A bare "%" would mean %FREE to disko.
+  disko.devices.lvm_vg.vg0 = {
+    type = "lvm_vg";
+    lvs =
+      lib.mapAttrs
+        (
+          _:
+          { size, mountpoint }:
+          {
+            inherit size;
+            content = {
+              type = "filesystem";
+              format = "ext4";
+              inherit mountpoint;
+            };
+          }
+        )
+        {
+          root = {
+            size = "10%VG";
+            mountpoint = "/";
+          };
+          nix = {
+            size = "50%VG";
+            mountpoint = "/nix";
+          };
+          var = {
+            size = "15%VG";
+            mountpoint = "/var";
+          };
+          log = {
+            size = "5%VG";
+            mountpoint = "/var/log";
+          };
+          home = {
+            size = "5%VG";
+            mountpoint = "/home";
+          };
+          tmp = {
+            size = "5%VG";
+            mountpoint = "/tmp";
+          };
+        };
   };
 
   # The auto-install ISO installs from this flake's nixpkgs.

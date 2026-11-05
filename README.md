@@ -414,6 +414,10 @@ in at the VM's console.
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
 was when built, and a deploy updates it from there.
 
+A deploy can't change a VM's disk layout. A VM installed before a layout change in
+`modules/nixos/hyperv.nix` must be reinstalled from a new ISO before its next deploy,
+or it won't find its disks on reboot. Reinstalling wipes the disk.
+
 To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 
 ```bash
