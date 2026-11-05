@@ -386,6 +386,9 @@ which has no password. It's at `172.16.1.254`, and uses Pi-hole on `172.16.1.3` 
 name lookups fail unless `dcyclops` is running. It has no SSH and isn't managed by
 `just deploy`.
 
+Add a tool for the current shell with `nix shell nixpkgs#<package>`. Packages download
+through Pi-hole's DNS, and go when the VM does.
+
 To turn it off and delete it, with its folder under `E:\Hyper-V VMs` and its ISO:
 
 ```bash
