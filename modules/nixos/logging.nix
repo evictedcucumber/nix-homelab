@@ -169,6 +169,8 @@ in
                   cookie_secure = true;
                   disable_gravatar = true;
                 };
+                # The default also writes files, which journald's limits wouldn't cover.
+                log.mode = "console";
                 users.allow_sign_up = false;
                 "auth.anonymous".enabled = false;
                 analytics = {
