@@ -350,6 +350,20 @@ so changes made in the interface don't last. To read logs, use Explore with a qu
 Loki keeps logs for 30 days. Nothing limits its size, only age, so check the disk if a
 service gets noisy. It's in `/var/lib/nixos-containers/logging/var/lib/loki`.
 
+Local logs are limited separately, so they can't fill the disk while Loki is down, or
+shrink what it has already stored:
+
+| Log | Limit |
+| --- | --- |
+| Host journal | 2 GB, 1 month |
+| Each container's journal | 256 MB, 1 month |
+| `/var/log/audit` | 10 files of 50 MB, rotated by `auditd`, which drops the oldest |
+| `wtmp`, `btmp` | Monthly with one old copy, rotated by `logrotate` |
+| Pi-hole's `/var/log/pihole` | `logrotate`, by date from nixpkgs, and sooner at 100 MB for `pihole.log` or 50 MB for `FTL.log` and `webserver.log` |
+
+`logrotate` runs hourly on each host and in each container, and `modules/nixos/log-retention.nix`
+turns it on and sets the journal limits. Grafana and Loki only log to their container's journal.
+
 Loki has no login, so a firewall rule on the host drops connections to its port 3100 from
 every user except `root` and `alloy` (UID 399). Alloy keeps its place in the journal in
 `/var/lib/alloy`, so after a restart it carries on from there, and if Loki is down it keeps
