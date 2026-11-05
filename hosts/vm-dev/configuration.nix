@@ -47,6 +47,12 @@
     };
   };
 
+  # Copied rather than linked, so it can be edited on the VM.
+  systemd.tmpfiles.rules = [
+    "d /root/tests/dns"
+    "C /root/tests/dns/queries.txt 0644 - - - ${../../tests/dns/queries.txt}"
+  ];
+
   environment.systemPackages = [
     pkgs.curl
     pkgs.dnsutils
