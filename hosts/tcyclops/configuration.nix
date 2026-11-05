@@ -1,5 +1,8 @@
 {
-  imports = [ ../../modules/nixos/hyperv.nix ];
+  imports = [
+    ../../modules/nixos/hyperv.nix
+    ../../modules/nixos/hyperv-lvm.nix
+  ];
 
   networking = {
     interfaces.eth0.ipv4.addresses = [

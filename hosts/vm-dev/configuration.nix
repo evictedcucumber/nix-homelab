@@ -4,6 +4,15 @@
 {
   imports = [ ../../modules/nixos/hyperv.nix ];
 
+  disko.devices.disk.main.content.partitions.root = {
+    size = "100%";
+    content = {
+      type = "filesystem";
+      format = "ext4";
+      mountpoint = "/";
+    };
+  };
+
   networking = {
     interfaces.eth0.ipv4.addresses = [
       {

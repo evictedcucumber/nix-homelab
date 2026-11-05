@@ -22,6 +22,7 @@ in
     path = [
       config.nix.package
       config.system.build.nixos-install
+      pkgs.kmod
       pkgs.util-linux
     ];
     serviceConfig = {
