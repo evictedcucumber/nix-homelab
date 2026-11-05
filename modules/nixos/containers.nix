@@ -38,8 +38,11 @@ in
           config = {
             imports = [
               ./container-firewall.nix
+              ./log-retention.nix
               ./minimal.nix
             ];
+
+            services.journald.settings.Journal.SystemMaxUse = "256M";
 
             networking = {
               enableIPv6 = false;
