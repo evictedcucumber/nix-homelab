@@ -132,6 +132,10 @@ in
       disk_error_action = "SYSLOG";
       # V-268110
       log_group = "root";
+      # Without these the log grows until the disk fills. 500 MB in all.
+      max_log_file = 50;
+      max_log_file_action = "rotate";
+      num_logs = 10;
     };
   };
 
