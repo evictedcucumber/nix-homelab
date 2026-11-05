@@ -50,7 +50,7 @@ Run `just` to list the recipes:
 | `just check`                           | Evaluate every host and check formatting     |
 | `just update [input]`                  | Update flake inputs                          |
 | `just build <host>`                    | Build a host's system without activating it  |
-| `just deploy <host> [target]`          | Build in WSL and activate on the host        |
+| `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |

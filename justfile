@@ -40,8 +40,8 @@ update input="":
 build host:
     nix build .#nixosConfigurations.{{ host }}.config.system.build.toplevel
 
-# Build locally, then activate on the remote host
-deploy host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir
+# Build locally, activate on the remote host, then offer a reboot if the host needs one
+deploy host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir && (_offer-reboot host target)
     nixos-rebuild switch --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
 
 # Activate on the remote host until its next reboot, to try a risky change
@@ -92,6 +92,24 @@ _vm-dev-destroy:
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM vm-dev -Destroy
     dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && rm -f "$dir/vm-dev-nix-auto.iso"
     rm -f result-vm-dev-iso
+
+# Only a new kernel, initrd, or kernel modules can't be activated by a switch
+[private]
+_offer-reboot host target:
+    #!/usr/bin/env bash
+    set -u
+    status=0
+    ssh -n $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} 'for p in initrd kernel kernel-modules; do [ "$(readlink /run/booted-system/$p)" = "$(readlink /run/current-system/$p)" ] || exit 10; done' || status=$?
+    case "$status" in
+        0) exit 0 ;;
+        10) ;;
+        *) echo "Could not tell whether {{ host }} needs a reboot" >&2; exit 0 ;;
+    esac
+    read -r -p "{{ host }} needs a reboot for its new kernel or initrd. Reboot now? [y/N] " answer || answer=n
+    case "$answer" in
+        [yY] | [yY][eE][sS]) exec {{ just_executable() }} reboot {{ host }} {{ target }} ;;
+        *) echo "Skipped. Run 'just reboot {{ host }} {{ target }}' when ready." ;;
+    esac
 
 [private]
 _known-hosts-dir:
