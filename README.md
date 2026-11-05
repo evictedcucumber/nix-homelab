@@ -193,7 +193,8 @@ Nix daemon. An activation step that writes to the store, such as a custom
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
 outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
 and hosts don't answer ping. A host can also connect to its own [containers](#containers),
-and forwards inbound DNS and web traffic for one extra address to [Pi-hole](#pi-hole).
+and forwards inbound DNS and web traffic for one extra address to [Pi-hole](#pi-hole), and
+web traffic for another to [Grafana](#logging).
 
 DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
 to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
@@ -315,6 +316,53 @@ just update blocklist
 
 Then run `just deploy <host>`, which reloads it. Lists added in the web interface can't be
 downloaded either, for the same reason.
+
+## Logging
+
+`modules/nixos/logging.nix` runs Grafana and Loki on every host, in one container named
+`logging` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the host
+and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
+and every service's output, and each line is labelled with the host, `unit`, `identifier`,
+`transport` and `level`.
+
+Grafana is on its own address on the host's network, set with `logging.lanAddress`:
+`172.16.0.4` on `tcyclops` and `172.16.1.4` on `dcyclops`. `cyclops` has none yet, so
+nothing outside it can reach Grafana there. As with Pi-hole, the host forwards TCP port 443
+from private addresses to the container and drops everything else sent to the address.
+
+The interface is at `https://172.16.0.4/`. Its certificate is self-signed, so browsers warn
+about it, and it's made again when the address changes. Sign in as `admin`. The password and
+the key that signs sessions are generated when Grafana first starts, and stay out of the Nix
+store. Read the password on the host:
+
+```bash
+sudo cat /var/lib/nixos-containers/logging/var/lib/grafana/admin-password
+```
+
+Loki is already the default data source, and the Host logs dashboard shows failed SSH
+logins, `sudo` use, the rate of audit events, and errors by unit. Both come from this repo,
+so changes made in the interface don't last. To read logs, use Explore with a query such as:
+
+```logql
+{host="tcyclops", identifier="sudo"}
+```
+
+Loki keeps logs for 30 days. Nothing limits its size, only age, so check the disk if a
+service gets noisy. It's in `/var/lib/nixos-containers/logging/var/lib/loki`.
+
+Loki has no login, so a firewall rule on the host drops connections to its port 3100 from
+every user except `root` and `alloy` (UID 399). Alloy keeps its place in the journal in
+`/var/lib/alloy`, so after a restart it carries on from there, and if Loki is down it keeps
+retrying. Lines it's still holding in memory when it stops can be lost, such as when a host
+shuts down after the container. With no saved place, it starts 72 hours back.
+
+The logs are not copied off the host, so root on a host can erase that host's logs, and
+anything that wipes the host takes them too. Check it from the host:
+
+```bash
+sudo journalctl -u alloy
+sudo nixos-container run logging -- journalctl -u loki -u grafana
+```
 
 ## Setting up the VMs
 

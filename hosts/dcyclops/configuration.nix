@@ -11,9 +11,14 @@
         address = "172.16.1.3";
         prefixLength = 24;
       }
+      {
+        address = "172.16.1.4";
+        prefixLength = 24;
+      }
     ];
     defaultGateway = "172.16.1.1";
   };
 
   pihole.lanAddress = "172.16.1.3";
+  logging.lanAddress = "172.16.1.4";
 }
