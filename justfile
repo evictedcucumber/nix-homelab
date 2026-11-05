@@ -65,6 +65,11 @@ vm-create host *flags: (iso host iso_dir) _known-hosts-dir
 # Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
 vm-rebuild host: (vm-create host "-Rebuild")
 
+# Create and start the throwaway desktop VM, or destroy it with its disk and ISO, after a UAC prompt
+[arg("action", pattern="create|destroy")]
+vm-dev action:
+    @{{ just_executable() }} iso_dir="{{ iso_dir }}" _vm-dev-{{ action }}
+
 # Enable Windows forwarding to the VM networks, after a UAC prompt; re-run after a WSL restart
 vm-forwarding *flags:
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
@@ -77,6 +82,16 @@ hardware-config host target: _known-hosts-dir
 # Delete local build result links
 clean:
     rm -f result result-*
+
+[private]
+_vm-dev-create: (iso "vm-dev" iso_dir)
+    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM vm-dev -IsoPath "$(wslpath -wa "$dir/vm-dev-nix-auto.iso")" -Start
+
+[private]
+_vm-dev-destroy:
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM vm-dev -Destroy
+    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && rm -f "$dir/vm-dev-nix-auto.iso"
+    rm -f result-vm-dev-iso
 
 [private]
 _known-hosts-dir:

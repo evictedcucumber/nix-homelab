@@ -1,11 +1,12 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Creates or updates the NixOS tcyclops (test) or dcyclops (dev) Hyper-V VM idempotently.
+    Creates or updates the NixOS tcyclops (test), dcyclops (dev) or vm-dev (desktop)
+    Hyper-V VM idempotently, or destroys an ephemeral one.
 
 .DESCRIPTION
-    Manages two Generation 2 Hyper-V VMs running NixOS, selected with -VM. They
-    are separate from the Debian tcyclops and dcyclops VMs, which have different
+    Manages Generation 2 Hyper-V VMs running NixOS, selected with -VM. They are
+    separate from the Debian tcyclops and dcyclops VMs, which have different
     Hyper-V names, switches and subnets. Build the ISO with `just iso <vm> <dir>`.
 
     Each VM gets its own internal virtual switch and subnet; the host holds
@@ -14,6 +15,7 @@
       VM        Switch          Host/gateway IP   Subnet
       tcyclops  NixHomelab      172.16.0.1        172.16.0.0/24
       dcyclops  NixHomelabDev   172.16.1.1        172.16.1.0/24
+      vm-dev    NixHomelabDev   172.16.1.1        172.16.1.0/24
 
     Both subnets use this lab's own NAT, "NixHomelabNAT", with prefix
     172.16.0.0/16, which this script creates if it is missing. It never changes
@@ -24,6 +26,7 @@
       tcyclops  Permanent test VM. Created once and reconciled on re-runs.
       dcyclops  Ephemeral dev VM. Brought up, used, brought down, and rebuilt
                 from scratch with -Rebuild (e.g. -VM dcyclops -Rebuild -Start).
+      vm-dev    Ephemeral desktop VM for testing services on dcyclops's network.
 
     Creates the VM if it does not exist, or reconciles its configuration if it
     already exists. Most settings (vCPU count, nested virtualization, static
@@ -45,12 +48,17 @@
     with the ISO attached and a fresh "pre-os-install" checkpoint. It is
     refused for permanent VMs such as tcyclops; use -Reinstall there.
 
+    -Destroy (ephemeral VMs only) does the same removal and stops there. It
+    leaves the switch and NAT, which other VMs share.
+
 .PARAMETER VM
-    Which VM to manage: tcyclops (permanent test VM) or dcyclops (ephemeral
-    dev VM). Per-VM name and sizing live in the Desired Configuration section.
+    Which VM to manage: tcyclops (permanent test VM), dcyclops (ephemeral dev
+    VM) or vm-dev (ephemeral desktop VM). Per-VM name and sizing live in the
+    Desired Configuration section.
 
 .PARAMETER IsoPath
-    Path to the autoinstall ISO to mount in the VM's DVD drive.
+    Path to the autoinstall ISO to mount in the VM's DVD drive. Required unless
+    -Destroy is given.
 
 .PARAMETER Force
     Stop the VM if it is running so offline-only settings can be applied.
@@ -63,6 +71,11 @@
     Destroy and recreate the VM from scratch: stop it, remove the VM, delete
     its VHD directory (including checkpoint files), then run the normal create
     path. Only allowed for ephemeral VMs (dcyclops). WARNING: all VM data is
+    lost.
+
+.PARAMETER Destroy
+    Turn the VM off, remove it, and delete its folder including every VHD and
+    checkpoint file. Only allowed for ephemeral VMs. WARNING: all VM data is
     lost.
 
 .PARAMETER Start
@@ -79,6 +92,11 @@
     Throw away dcyclops (if present), recreate it from scratch, and boot it
     into the unattended installer.
 
+.EXAMPLE
+    .\create-nix-vm.ps1 -VM vm-dev -Destroy
+
+    Remove the desktop VM and everything stored for it.
+
 .NOTES
     Run in an elevated PowerShell session (Administrator).
 #>
@@ -86,10 +104,9 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('tcyclops', 'dcyclops')]
+    [ValidateSet('tcyclops', 'dcyclops', 'vm-dev')]
     [string]$VM,
 
-    [Parameter(Mandatory)]
     [string]$IsoPath,
 
     [switch]$Force,
@@ -97,6 +114,8 @@ param(
     [switch]$Reinstall,
 
     [switch]$Rebuild,
+
+    [switch]$Destroy,
 
     [switch]$Start
 )
@@ -124,6 +143,16 @@ $VMConfigs = @{
         MemoryStartup = 4GB
         CPUCount      = 2
         VHDSize       = 64GB
+        Ephemeral     = $true
+        SwitchName    = "NixHomelabDev"
+        HostIPAddress = "172.16.1.1"
+        Subnet        = "172.16.1.0/24"
+    }
+    "vm-dev" = @{
+        Name          = "[nix] vm-dev"
+        MemoryStartup = 4GB
+        CPUCount      = 2
+        VHDSize       = 16GB
         Ephemeral     = $true
         SwitchName    = "NixHomelabDev"
         HostIPAddress = "172.16.1.1"
@@ -171,8 +200,73 @@ $VHDSizeGB = [int]($VHDSize / 1GB)
 $EnableTPM = $true
 
 # ---------------------------------------------------------------------
+# Removal  (ephemeral VMs only)
+# ---------------------------------------------------------------------
+
+function Remove-LabVM
+{
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    $existingVm = Get-LabVM
+
+    if ($existingVm)
+    {
+        if ($PSCmdlet.ShouldProcess($Name, "Turn off and remove VM"))
+        {
+            if ($existingVm.State -ne 'Off')
+            {
+                Write-Host "Turning off VM '$Name'..." -ForegroundColor Cyan
+                Stop-VM -VM (Get-LabVM) -TurnOff -Force -Confirm:$false
+            }
+
+            Write-Host "Removing VM '$Name'..." -ForegroundColor Cyan
+            Remove-VM -VM (Get-LabVM) -Force -Confirm:$false
+        }
+    }
+    else
+    {
+        Write-Host "VM '$Name' does not exist; nothing to remove." -ForegroundColor Yellow
+    }
+
+    # Delete leftover storage (VHD, .avhdx checkpoint files). Never touch
+    # anything outside $VMPath.
+    $vmPathFull = [System.IO.Path]::GetFullPath($VMPath).TrimEnd('\', '/')
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or -not $VMRoot.StartsWith($vmPathFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))
+    {
+        throw "Refusing to delete '$VMRoot': it is not inside '$vmPathFull'."
+    }
+
+    if (Test-Path -LiteralPath $VMRoot)
+    {
+        if ($PSCmdlet.ShouldProcess($VMRoot, "Delete VM storage (VHDs and checkpoint files)"))
+        {
+            Write-Host "Deleting '$VMRoot'..." -ForegroundColor Cyan
+            Remove-Item -LiteralPath $VMRoot -Recurse -Force
+        }
+    }
+}
+
+if (($Rebuild -or $Destroy) -and -not $Ephemeral)
+{
+    throw "-Rebuild and -Destroy are refused for permanent VM '$VM'. Use -Reinstall to re-arm the installer instead."
+}
+
+if ($Destroy)
+{
+    Remove-LabVM
+    return
+}
+
+# ---------------------------------------------------------------------
 # Prerequisites
 # ---------------------------------------------------------------------
+
+if (-not $IsoPath)
+{
+    throw "-IsoPath is required unless -Destroy is given."
+}
 
 # Resolve the ISO to an absolute path up front: Hyper-V cmdlets and the VMMS
 # service do not share this process's working directory, and $dvd.Path
@@ -265,11 +359,6 @@ function Assert-Prerequisite
 }
 
 Assert-Prerequisite
-
-if ($Rebuild -and -not $Ephemeral)
-{
-    throw "-Rebuild is refused for permanent VM '$VM'. Use -Reinstall to re-arm the installer instead."
-}
 
 # ---------------------------------------------------------------------
 # Network Switch Setup
@@ -369,49 +458,12 @@ Initialize-NetworkSwitch
 Initialize-LabNat
 
 # ---------------------------------------------------------------------
-# Rebuild  (ephemeral VMs only): tear down so the create path starts fresh
+# Rebuild: tear down so the create path starts fresh
 # ---------------------------------------------------------------------
 
 if ($Rebuild)
 {
-    $existingVm = Get-LabVM
-
-    if ($existingVm)
-    {
-        if ($PSCmdlet.ShouldProcess($Name, "Rebuild: turn off and remove VM"))
-        {
-            if ($existingVm.State -ne 'Off')
-            {
-                Write-Host "Turning off VM '$Name'..." -ForegroundColor Cyan
-                Stop-VM -VM (Get-LabVM) -TurnOff -Force -Confirm:$false
-            }
-
-            Write-Host "Removing VM '$Name'..." -ForegroundColor Cyan
-            Remove-VM -VM (Get-LabVM) -Force -Confirm:$false
-        }
-    }
-    else
-    {
-        Write-Host "VM '$Name' does not exist; nothing to remove." -ForegroundColor Yellow
-    }
-
-    # Delete leftover storage (VHD, .avhdx checkpoint files). Never touch
-    # anything outside $VMPath.
-    $vmPathFull = [System.IO.Path]::GetFullPath($VMPath).TrimEnd('\', '/')
-
-    if ([string]::IsNullOrWhiteSpace($Name) -or -not $VMRoot.StartsWith($vmPathFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))
-    {
-        throw "Refusing to delete '$VMRoot': it is not inside '$vmPathFull'."
-    }
-
-    if (Test-Path -LiteralPath $VMRoot)
-    {
-        if ($PSCmdlet.ShouldProcess($VMRoot, "Rebuild: delete VM storage (VHDs and checkpoint files)"))
-        {
-            Write-Host "Deleting '$VMRoot'..." -ForegroundColor Cyan
-            Remove-Item -LiteralPath $VMRoot -Recurse -Force
-        }
-    }
+    Remove-LabVM
 }
 
 # ---------------------------------------------------------------------

@@ -7,6 +7,7 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from WSL.
 | `cyclops`  | Physical server          | Production                                 |
 | `tcyclops` | Hyper-V VM on the WSL PC | Long-lived test VM                         |
 | `dcyclops` | Hyper-V VM on the WSL PC | Throwaway dev VM, rebuilt whenever needed  |
+| `vm-dev`   | Hyper-V VM on the WSL PC | Temporary desktop for testing `dcyclops`   |
 
 These VMs mirror the Debian `tcyclops` and `dcyclops` from the `homelab` repo and
 run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names differ:
@@ -55,6 +56,7 @@ Run `just` to list the recipes:
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
 | `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it   |
 | `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO           |
+| `just vm-dev <create\|destroy>`         | Create or remove the throwaway desktop VM    |
 | `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks |
 | `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
@@ -358,6 +360,26 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 
 ```bash
 just vm-rebuild dcyclops
+```
+
+## Testing from a desktop
+
+`vm-dev` is a temporary XFCE desktop with Firefox and a terminal, for testing services on
+`dcyclops` from another machine on its network:
+
+```bash
+just vm-dev create
+```
+
+Open `[nix] vm-dev` in Hyper-V Manager. It installs itself, reboots, and logs in as `root`,
+which has no password. It's at `172.16.1.254`, and uses Pi-hole on `172.16.1.3` for DNS, so
+name lookups fail unless `dcyclops` is running. It has no SSH and isn't managed by
+`just deploy`.
+
+To turn it off and delete it, with its folder under `E:\Hyper-V VMs` and its ISO:
+
+```bash
+just vm-dev destroy
 ```
 
 ## Setting up the server
