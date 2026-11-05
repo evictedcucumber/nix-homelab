@@ -32,6 +32,10 @@ pre-commit:
 check:
     nix flake check
 
+# Run the tests a change since main can affect, or only the ones named
+test *names:
+    scripts/test.sh {{ names }}
+
 # Update all flake inputs, or only the one named
 update input="":
     nix flake update {{ input }}

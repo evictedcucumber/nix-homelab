@@ -25,7 +25,8 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `hosts/<name>/`  | Per-host configuration                                 |
 | `modules/nixos/` | Config shared between hosts, and the unattended installer |
 | `home/`          | Home Manager config for each user                      |
-| `scripts/`       | Hyper-V network and VM setup                           |
+| `scripts/`       | Hyper-V network and VM setup, and the test runner      |
+| `tests/`         | NixOS tests, run by `just test`                        |
 | `treefmt.nix`    | Formatters and linters run by `nix fmt`                |
 | `justfile`       | Common commands                                        |
 
@@ -48,6 +49,7 @@ Run `just` to list the recipes:
 | `just fmt`                             | Format and lint with nixfmt, deadnix, statix |
 | `just pre-commit`                      | Run the pre-commit checks on every file      |
 | `just check`                           | Evaluate every host and check formatting     |
+| `just test [names]`                    | Run the tests a change can affect            |
 | `just update [input]`                  | Update flake inputs                          |
 | `just build <host>`                    | Build a host's system without activating it  |
 | `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
@@ -420,6 +422,40 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 
 ```bash
 just vm-rebuild dcyclops
+```
+
+## Testing changes
+
+`just test` runs what the changes since `main` can affect, without KVM or a deployed host.
+Set `TEST_BASE` to compare with another branch.
+
+| Step                                       | Without KVM         | Runs when                  |
+| ------------------------------------------ | ------------------- | -------------------------- |
+| Build `cyclops`, `dcyclops`, `tcyclops`    | Only what changed   | A Nix file changed         |
+| `container-isolation`, `logging`, `pihole` | Under a minute each | A Nix file changed         |
+| `boot`, in QEMU                            | About a minute      | Its inputs changed, below  |
+
+Nix caches results, so a step the change can't affect takes no time. `boot` runs when
+`tests/boot.nix` or `dcyclops`'s kernel, initrd, stage 2, kernel modules or parameters,
+sysctls or file systems change.
+
+Name tests to run only those, whether anything changed or not:
+
+```bash
+just test boot logging
+```
+
+`boot` only boots `dcyclops`, and QEMU skips its bootloader, so a change to only another
+host's boot, or to GRUB, isn't covered. The nspawn tests can't check a container's
+`privateUsers`, which they turn off to nest containers, so that's left to building the
+hosts. Pi-hole's lookups and blocklist need an upstream, which the sandbox doesn't have.
+
+The nspawn tests need these settings on the machine that builds, in its `nix.conf`:
+
+```ini
+experimental-features = nix-command flakes auto-allocate-uids
+auto-allocate-uids = true
+system-features = nixos-test benchmark big-parallel kvm uid-range
 ```
 
 ## Testing from a desktop
