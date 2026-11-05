@@ -20,6 +20,12 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Hosts can't download lists, so the blocklist arrives with each deploy.
+    blocklist = {
+      url = "git+https://github.com/zachlagden/Pi-hole-Optimized-Blocklists?lfs=1&shallow=1";
+      flake = false;
+    };
   };
 
   outputs =
@@ -30,6 +36,7 @@
       disko,
       home-manager,
       treefmt-nix,
+      blocklist,
     }:
     let
       vmHosts = [
@@ -40,6 +47,7 @@
       mkHost =
         name:
         nixpkgs.lib.nixosSystem {
+          specialArgs = { inherit blocklist; };
           modules = [
             {
               networking.hostName = name;

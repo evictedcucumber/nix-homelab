@@ -1,8 +1,18 @@
 # Pi-hole in a container, with DNS and its web interface on an address of its own on the host's
 # network. It resolves through the host, so its lookups still leave over TLS.
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  blocklist,
+  ...
+}:
 let
   address = "10.233.0.2";
+  # Only this file, not the rest of the repo, ends up on the host.
+  blocklistFile = builtins.path {
+    name = "blocklist.txt";
+    path = "${blocklist}/lists/all_domains.txt";
+  };
   inherit (config.pihole) lanAddress;
   privateRanges = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }";
 in
@@ -27,6 +37,8 @@ in
           {
             containerFirewall.allowDns = true;
 
+            environment.etc."pihole/blocklist.txt".source = blocklistFile;
+
             services.pihole-web = {
               enable = true;
               # The port 80 redirect goes here, and clients might not resolve through Pi-hole.
@@ -41,6 +53,15 @@ in
               enable = true;
               openFirewallDNS = true;
               openFirewallWebserver = true;
+              # Lists are added by URL, so a store path would leave a stale entry after each update.
+              lists = [
+                {
+                  url = "file:///etc/pihole/blocklist.txt";
+                  description = "Pi-hole Optimized Blocklists";
+                }
+              ];
+              # Can't be downloaded, and only labels devices in DHCP and the network table.
+              macvendorURL = "";
               settings = {
                 dns = {
                   upstreams = config.networking.nameservers;
@@ -61,8 +82,21 @@ in
               };
             };
 
+            # As a oneshot this holds up the container's boot, but it needs DNS, and the host only
+            # sets up its side of the network after boot. Lists also fail to load while DNS is down.
+            systemd.services.pihole-ftl-setup = {
+              startLimitIntervalSec = 0;
+              serviceConfig = {
+                Type = lib.mkForce "exec";
+                Restart = "on-failure";
+                RestartSec = 30;
+              };
+            };
+
             systemd.services.pihole-ftl = {
               startLimitIntervalSec = 0;
+              # Starting FTL also reloads the lists.
+              restartTriggers = [ blocklistFile ];
               serviceConfig = {
                 Restart = lib.mkForce "always";
                 # Made below, and kept out of the Nix store.
