@@ -323,11 +323,18 @@ downloaded either, for the same reason.
 
 ## Logging
 
-`modules/nixos/logging.nix` runs Grafana and Loki on every host, in one container named
-`grafana` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the host
-and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
+`modules/nixos/logging.nix` runs Grafana, Loki and Prometheus on every host, in one container
+named `grafana` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the
+host and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
 and every service's output, and each line is labelled with the host, `unit`, `identifier`,
 `transport` and `level`.
+
+Every container in `containers` is picked up with no setup: Alloy also reads each one's journal
+from `/var/lib/nixos-containers/<name>/var/log/journal`, labelled with the host and
+`container`. The label comes from the config, not from the journal, which the container
+controls. Alloy also sends each container's state, restarts and tasks (from `systemd`) and CPU
+and memory (from cAdvisor) to Prometheus. Alloy restarts when a container starts with a
+journal newer than Alloy, such as on its first start, so it finds the new journal.
 
 Grafana is on its own address on the host's network, set with `logging.lanAddress`:
 `172.16.0.4` on `tcyclops` and `172.16.1.4` on `dcyclops`. `cyclops` has none yet, so
@@ -343,16 +350,19 @@ store. Read the password on the host:
 sudo cat /var/lib/nixos-containers/grafana/var/lib/grafana/admin-password
 ```
 
-Loki is already the default data source, and the Host logs dashboard shows failed SSH
-logins, `sudo` use, the rate of audit events, and errors by unit. Both come from this repo,
-so changes made in the interface don't last. To read logs, use Explore with a query such as:
+Loki is already the default data source, next to Prometheus. The Host logs dashboard shows
+failed SSH logins, `sudo` use, the rate of audit events, and errors by unit. The Containers
+dashboard shows each container's state, restarts, CPU, memory, tasks, log volume, errors and
+logs, for the hosts and containers picked at the top. Both come from this repo, so changes
+made in the interface don't last. To read logs, use Explore with a query such as:
 
 ```logql
 {host="tcyclops", identifier="sudo"}
 ```
 
 Loki keeps logs for 30 days. Nothing limits its size, only age, so check the disk if a
-service gets noisy. It's in `/var/lib/nixos-containers/grafana/var/lib/loki`.
+service gets noisy. It's in `/var/lib/nixos-containers/grafana/var/lib/loki`. Prometheus
+also keeps 30 days, in `/var/lib/nixos-containers/grafana/var/lib/prometheus2`.
 
 Local logs are limited separately, so they can't fill the disk while Loki is down, or
 shrink what it has already stored:
@@ -368,9 +378,10 @@ shrink what it has already stored:
 `logrotate` runs hourly on each host and in each container, and `modules/nixos/log-retention.nix`
 turns it on and sets the journal limits. Grafana and Loki only log to their container's journal.
 
-Loki has no login, so a firewall rule on the host drops connections to its port 3100 from
-every user except `root` and `alloy` (UID 399). Alloy keeps its place in the journal in
-`/var/lib/alloy`, so after a restart it carries on from there, and if Loki is down it keeps
+Loki and Prometheus have no login, so a firewall rule on the host drops connections to their
+ports 3100 and 9090 from every user except `root` and `alloy` (UID 399). `alloy` can also
+pass through `/var/lib/nixos-containers`, by group, but not list it, to reach the journals.
+Alloy keeps its place in each journal in `/var/lib/alloy`, so after a restart it carries on from there, and if Loki is down it keeps
 retrying. Lines it's still holding in memory when it stops can be lost, such as when a host
 shuts down after the container. With no saved place, it starts 72 hours back.
 

@@ -258,7 +258,7 @@
           },
           "editorMode": "code",
           "queryType": "range",
-          "expr": "label_replace(sum by (unit) (count_over_time({level=~\"emerg|alert|crit|error\"} [$__interval])), \"unit\", \"none\", \"unit\", \"^$\")",
+          "expr": "label_replace(sum by (unit) (count_over_time({container=\"\", level=~\"emerg|alert|crit|error\"} [$__interval])), \"unit\", \"none\", \"unit\", \"^$\")",
           "legendFormat": "{{unit}}"
         }
       ]
