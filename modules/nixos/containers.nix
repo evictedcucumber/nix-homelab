@@ -26,6 +26,12 @@ let
   ];
 in
 {
+  options.containerRoot.group = lib.mkOption {
+    type = lib.types.str;
+    default = "root";
+    description = "Group that can traverse /var/lib/nixos-containers, and nothing more.";
+  };
+
   options.containers = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule {
@@ -90,7 +96,11 @@ in
     # Containers resolve through the host, so their lookups also leave over TLS. Root in a
     # container can flush its firewall, so the host only opens DNS to those that asked for it.
     # Container files keep their in-container UIDs on disk, which can match host users.
-    systemd.tmpfiles.rules = [ "d /var/lib/nixos-containers 0700 root root -" ];
+    systemd.tmpfiles.rules = [
+      "d /var/lib/nixos-containers ${
+        if config.containerRoot.group == "root" then "0700" else "0710"
+      } root ${config.containerRoot.group} -"
+    ];
 
     services.resolved.settings.Resolve.DNSStubListenerExtra = hostAddress;
     networking.firewall.extraInputRules = lib.mkIf (dnsInterfaces != [ ]) ''
