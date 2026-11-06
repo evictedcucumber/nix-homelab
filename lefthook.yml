@@ -5,3 +5,5 @@ pre-commit:
   commands:
     format:
       run: nix fmt -- --ci {staged_files}
+    secrets:
+      run: scripts/check-secrets.sh {staged_files}
