@@ -24,6 +24,27 @@ let
     lib.attrNames
     (map (name: ''"ve-${name}"''))
   ];
+
+  # Each container's allowFrom as the connections it permits, with the container's address.
+  allowed = lib.concatLists (
+    lib.mapAttrsToList (
+      dst: c:
+      lib.concatLists (
+        lib.mapAttrsToList (
+          src: ports:
+          map (port: {
+            inherit src dst port;
+            address = c.localAddress;
+          }) ports
+        ) c.config.containerFirewall.allowFrom
+      )
+    ) config.containers
+  );
+  allowRule =
+    a:
+    ''iifname "ve-${a.src}" oifname "ve-${a.dst}" ip daddr ${a.address} tcp dport ${toString a.port} accept'';
+  replyRule =
+    a: ''iifname "ve-${a.dst}" oifname "ve-${a.src}" ct state { established, related } accept'';
 in
 {
   options.containerRoot.group = lib.mkOption {
@@ -89,6 +110,10 @@ in
         ) containers;
         message = "Containers keep their private network and user namespace, and only get their ve-<name> interface, because the host's rules don't cover anything else.";
       }
+      {
+        assertion = lib.all (a: config.containers ? ${a.src}) allowed;
+        message = "containerFirewall.allowFrom names a container that isn't in `containers`.";
+      }
     ];
 
     boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = 1;
@@ -106,6 +131,7 @@ in
     networking.firewall.extraInputRules = lib.mkIf (dnsInterfaces != [ ]) ''
       iifname { ${lib.concatStringsSep ", " dnsInterfaces} } meta l4proto { tcp, udp } th dport 53 accept
     '';
+    networking.firewall.extraForwardRules = lib.concatMapStringsSep "\n" allowRule allowed;
 
     networking.nftables.tables.container-guard = {
       family = "inet";
@@ -130,6 +156,7 @@ in
 
           # Runs before the firewall, which accepts anything DNATed by another container's forwardPorts.
           iifname "ve-*" meta nfproto ipv6 drop
+          ${lib.concatMapStringsSep "\n" (a: "${allowRule a}\n${replyRule a}") allowed}
           iifname "ve-*" oifname "ve-*" drop
         }
       '';

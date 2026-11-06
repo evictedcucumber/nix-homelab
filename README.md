@@ -310,14 +310,16 @@ allowing something on one side changes nothing until the other allows it too:
 | DNS                  | `containerFirewall.allowDns = true;`                         | Nothing, this opens it there too                                   |
 | Outbound connections | `containerFirewall.extraOutputRules = "tcp dport 443 accept";` | `networking.firewall.extraForwardRules = ''iifname "ve-web" tcp dport 443 accept'';` |
 | Inbound from the host | `networking.firewall.allowedTCPPorts = [ 80 ];`              | Nothing, the host can connect to its containers                    |
+| Inbound from another container | `containerFirewall.allowFrom.web = [ 8080 ];`, in the destination, naming the source | Nothing, this opens the port there too and forwards only it, from only `web` |
 
 Root in a container can flush that container's firewall, so treat it as policy for what
 the container should do, and the host's rules as the limit on a compromised one. The host
 always blocks the rest:
 
 - A container's root isn't root on the host, and the host's Nix daemon refuses it.
-- A container can't reach other containers, including through their `forwardPorts`, or
-  forge its source address.
+- A container can't reach other containers, except the TCP ports the destination lists in
+  `containerFirewall.allowFrom` for that source, or forge its source address. It can't
+  reach them through their `forwardPorts` either.
 - A container that hasn't enabled DNS can't reach any port on the host. One that has can
   only reach port 53, and its lookups go over TLS. They do leave the host, so a
   compromised container could still smuggle data out through them.

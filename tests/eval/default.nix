@@ -142,6 +142,9 @@ let
     (mkCase "logging.lanAddress not on an interface" d [
       { logging.lanAddress = lib.mkForce "172.16.9.9"; }
     ] "logging.lanAddress")
+    (mkCase "allowFrom naming a missing container" d [
+      { containers.pihole.config.containerFirewall.allowFrom.missing = [ 80 ]; }
+    ] "allowFrom")
 
     (mkCase "container names with one Alloy component name" d [
       {

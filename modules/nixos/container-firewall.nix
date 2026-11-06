@@ -8,6 +8,15 @@ in
   options.containerFirewall = {
     allowDns = lib.mkEnableOption "DNS through the host, which also opens it on the host's firewall";
 
+    allowFrom = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.listOf lib.types.port);
+      default = { };
+      example = {
+        grafana = [ 8080 ];
+      };
+      description = "TCP ports other containers, by name, can connect to. Opens them here, and the host forwards only these, from only those containers.";
+    };
+
     extraOutputRules = lib.mkOption {
       type = lib.types.lines;
       default = "";
@@ -21,6 +30,7 @@ in
       enable = true;
       allowPing = false;
       filterForward = true;
+      allowedTCPPorts = lib.concatLists (lib.attrValues cfg.allowFrom);
     };
 
     nftables = {
