@@ -141,6 +141,23 @@ The pre-commit hook checks the staged files with the same formatters and linters
 as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
 file, `git add` it and commit again.
 
+### Vulnerability scan
+
+`just vulnix <host>` builds the host's system closure here and scans it with
+[vulnix](https://github.com/nix-community/vulnix), which downloads the NVD feed, so it
+runs on the control node and never on a host. vulnix exits 2 when it reports
+vulnerabilities, and the recipe then prints a note instead of looking like a crash.
+
+To accept a finding, add it to `vulnix-whitelist.toml`, with a reason:
+
+```toml
+["openssl-3.0.0"]
+cve = ["CVE-2024-0000"]
+comment = "not reachable from the network"
+```
+
+`vulnix --write-whitelist FILE` can generate entries from the current findings.
+
 ## Packages
 
 `modules/nixos/minimal.nix` keeps hosts to a server's package set, using the nixpkgs

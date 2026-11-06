@@ -1,0 +1,4 @@
+# Accepted CVEs for `just vulnix`. Add entries as:
+#   ["package-1.2.3"]
+#   cve = ["CVE-2024-0000"]
+#   comment = "why it is accepted"

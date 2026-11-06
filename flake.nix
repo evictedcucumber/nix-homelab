@@ -167,6 +167,7 @@
               pkgs.nixos-rebuild
               pkgs.sops
               pkgs.ssh-to-age
+              pkgs.vulnix
               pkgs.yq-go
               treefmt.config.build.wrapper
             ];

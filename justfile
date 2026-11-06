@@ -98,6 +98,18 @@ signing-key:
     fi
     nix key convert-secret-to-public < "$key" > keys/nix-homelab-signing.pub
 
+# Scan a host's closure for known CVEs, built on this machine. Exit 2 means findings.
+vulnix host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(nix build --no-link --print-out-paths .#nixosConfigurations.{{ host }}.config.system.build.toplevel)
+    rc=0
+    vulnix --closure --whitelist vulnix-whitelist.toml "$out" || rc=$?
+    if [ "$rc" = 2 ]; then
+        echo "vulnix: vulnerabilities reported above (exit 2); whitelist accepted ones in vulnix-whitelist.toml." >&2
+    fi
+    exit "$rc"
+
 # Create secrets/<host>.yaml with new random passwords, encrypted for the admin key; never overwrites
 secrets-init host:
     scripts/secrets.sh init {{ host }}
