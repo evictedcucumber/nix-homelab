@@ -64,6 +64,17 @@ let
       detail = "files: ${toString (map toString files)}";
     };
 
+  limitCase =
+    name: host:
+    let
+      limit = host.config.boot.loader.systemd-boot.configurationLimit;
+    in
+    {
+      name = "${name} caps its boot generations";
+      ok = limit != null && limit <= 20;
+      detail = "configurationLimit: ${builtins.toJSON limit}";
+    };
+
   cases = [
     (mkCase "cyclops passes" hosts.cyclops [ ] null)
     (mkCase "dcyclops passes" hosts.dcyclops [ ] null)
@@ -120,6 +131,10 @@ let
     (realSecretsCase "cyclops" hosts.cyclops)
     (realSecretsCase "dcyclops" hosts.dcyclops)
     (realSecretsCase "tcyclops" hosts.tcyclops)
+
+    (limitCase "cyclops" hosts.cyclops)
+    (limitCase "dcyclops" hosts.dcyclops)
+    (limitCase "tcyclops" hosts.tcyclops)
 
     (mkCase "pihole.lanAddress not on an interface" d [
       { pihole.lanAddress = lib.mkForce "172.16.9.9"; }

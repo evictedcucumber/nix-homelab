@@ -66,6 +66,9 @@ in
     };
   };
 
+  # Each generation keeps a kernel and initrd on the small ESP.
+  boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
+
   networking.domain = "homelab.zezura.cc";
 
   services.openssh = {
