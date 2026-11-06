@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 user=${DEPLOY_USER:-captain}
-names=(grafana-admin-password grafana-secret-key pihole-web-password)
+names=(grafana-admin-password grafana-secret-key ntfy-grafana-password ntfy-phone-password pihole-web-password)
 
 usage() {
     echo "usage: $0 init <host> | $0 <check|rekey> <host> <target>" >&2

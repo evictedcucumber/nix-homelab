@@ -57,6 +57,7 @@ Run `just` to list the recipes:
 | `just set-password <user>`             | Write a login password's hash to `users/`    |
 | `just secrets-init <host>`             | Create a host's secrets file, never replacing |
 | `just secrets-rekey <host> [target]`   | Encrypt a host's secrets for its SSH host key |
+| `just ntfy-cert <host> [target]`       | Print a host's ntfy certificate, to import into the phone |
 | `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
@@ -268,7 +269,7 @@ and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start an
 outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
 and hosts don't answer ping. A host can also connect to its own [containers](#containers),
 and forwards inbound DNS and web traffic for one extra address to [Pi-hole](#pi-hole), and
-web traffic for another to [Grafana](#logging).
+web traffic for others to [Grafana](#logging) and [ntfy](#alerts-ntfy).
 
 DNS goes from `systemd-resolved` to `dnsdist`, which sends it over TLS to Cloudflare, or
 to Quad9 while Cloudflare is down, and returns to Cloudflare when it recovers. There's no
@@ -400,8 +401,9 @@ and every service's output, and each line is labelled with the host, `unit`, `id
 Every container in `containers` is picked up with no setup: Alloy also reads each one's journal
 from `/var/lib/nixos-containers/<name>/var/log/journal`, labelled with the host and
 `container`. The label comes from the config, not from the journal, which the container
-controls. Alloy also sends each container's state, restarts and tasks (from `systemd`) and CPU
-and memory (from cAdvisor) to Prometheus. Alloy restarts when a container starts with a
+controls. Alloy also sends the state, restarts and tasks of every service on the host, which includes
+each container's (from `systemd`), and each container's CPU and memory (from cAdvisor) to
+Prometheus. Alloy restarts when a container starts with a
 journal newer than Alloy, such as on its first start, so it finds the new journal.
 
 Grafana is on its own address on the host's network, set with `logging.lanAddress`:
@@ -457,6 +459,75 @@ anything that wipes the host takes them too. Check it from the host:
 ```bash
 sudo journalctl -u alloy
 sudo nixos-container run grafana -- journalctl -u loki -u grafana
+```
+
+## Alerts (ntfy)
+
+Grafana raises alerts and [ntfy](https://ntfy.sh) delivers them to a phone. Both run on every
+host, each in its own container, and each host alerts about itself. `modules/nixos/ntfy.nix`
+runs ntfy in a container named `ntfy` at `10.233.0.4`, and `logging.nix` provisions Grafana's
+contact point, notification policy, message template and rules, so nothing is set up in the
+interface. Grafana can still be used without ntfy: the alerts just have nowhere to go.
+
+Grafana posts to `http://10.233.0.4:8080/alerts?template=grafana`. That port is the only one
+Grafana's container can reach in another container, set with `containerFirewall.allowFrom`, and
+no other container reaches ntfy. The messages hold only the alert name, host, severity and a
+short summary, such as `warning on dcyclops: /var is over 85% full`, never log lines or links.
+
+| Alert | Metric | Fires when |
+| --- | --- | --- |
+| Filesystem almost full | `node_filesystem_avail_bytes`, `node_filesystem_size_bytes` | A filesystem has been over 85% full for 10 minutes |
+| Low memory | `node_memory_MemAvailable_bytes`, `node_memory_MemTotal_bytes` | Under 10% is available for 10 minutes |
+| Service failed | `node_systemd_unit_state` | A service has been `failed` for 2 minutes |
+| Service restarting | `node_systemd_service_restart_total` | A host service restarted three times in 15 minutes; `container@*` units count, services inside containers don't |
+| No metrics | `node_boot_time_seconds` | The host's metrics are missing for 10 minutes, which means Alloy or Prometheus is down |
+
+The systemd rules see the host's units, including each `container@<name>.service`, but not the
+services running inside the containers. Grafana can't tell you it's down itself, and neither can
+ntfy, so a dead Grafana or ntfy is silent. `severity=critical` alerts reach the phone with high
+priority, the rest with the default.
+
+ntfy is on its own address on the host's network, set with `ntfy.lanAddress`: `172.16.0.5` on
+`tcyclops` and `172.16.1.5` on `dcyclops`. `cyclops` has none yet, so nothing outside it can reach
+ntfy there. As with Grafana, the host forwards TCP port 443 from private addresses to the container
+over TLS and drops everything else sent to the address. The certificate is self-signed, made when
+ntfy first starts, and again when the address changes or 30 days before it expires.
+
+Access is denied unless granted. Two users exist, with passwords from `secrets/<host>.yaml`: `grafana`
+(`ntfy-grafana-password`) can only publish to the `alerts` topic, and `phone`
+(`ntfy-phone-password`) can only read it. The web app and attachments are off. At every start ntfy
+hashes the passwords from the container's credentials and gets its users that way, so neither a
+password nor a hash is in the Nix store, and it refuses to start if one is empty. A changed password
+applies once you deploy.
+
+**Phone setup (Android):**
+
+1. Install the ntfy app.
+2. Get the certificate and send it to the phone: `just ntfy-cert dcyclops > ntfy.pem`. It's public,
+   but only root can read it on the host, so it asks for `captain`'s sudo password.
+3. In the app, open Settings, Advanced, Manage certificates and import `ntfy.pem` (needs app 1.22.2
+   or newer). Compare the SHA-256 fingerprint it shows with the one printed on the host's console by
+   `sudo openssl x509 -noout -fingerprint -sha256 -in /var/lib/nixos-containers/ntfy/var/lib/private/ntfy-sh/tls.crt`.
+   The certificate is made again when the address changes or it nears expiry, so import it again then.
+4. Print the password: `sops -d --extract '["ntfy-phone-password"]' secrets/dcyclops.yaml`.
+5. Subscribe to topic `alerts` on the server `https://172.16.1.5`, with user `phone` and that password.
+   Use the host's own address, such as `172.16.0.5` for `tcyclops`. Subscribe once per host.
+
+ntfy has no way out, so it can't use `ntfy.sh` to wake an iOS device, and the iOS app only gets
+alerts when it polls, which is delayed. Android holds a connection to the server open instead, so it
+needs the phone to reach the address.
+
+The VMs' addresses are behind the Hyper-V NAT switch (see [Networking](#networking)), so a phone on the
+home Wi-Fi can't reach them as they are. Add a route on the Windows PC and tell the router, or map the
+port on Windows with `netsh interface portproxy` to the address and give the phone the PC's address
+instead, which also changes what the certificate must say. A physical `cyclops` on the LAN needs
+neither.
+
+Check it from the host:
+
+```bash
+sudo nixos-container run ntfy -- journalctl -u ntfy-sh
+sudo nixos-container run grafana -- journalctl -u grafana | grep -i alert
 ```
 
 ## Setting up the VMs
@@ -528,7 +599,7 @@ Nothing secret is in the Nix store as plaintext, and no password is set by hand.
 | What | Where | How it reaches the host |
 | --- | --- | --- |
 | `captain` and `riley` login passwords | `users/<name>.hash`, yescrypt, in git | `hashedPassword` in `modules/nixos/common.nix` |
-| Grafana admin password and secret key, Pi-hole web password | `secrets/<host>.yaml`, encrypted with sops | sops-nix decrypts them on the host, and a systemd credential carries each into its [container](#containers) |
+| Grafana admin password and secret key, ntfy passwords, Pi-hole web password | `secrets/<host>.yaml`, encrypted with sops | sops-nix decrypts them on the host, and a systemd credential carries each into its [container](#containers) |
 
 **Keys.** Each host decrypts with an age key derived from its SSH host key
 (`/etc/ssh/ssh_host_ed25519_key`), which never leaves it. You edit with the admin age key
@@ -591,8 +662,8 @@ reinstalling a compromised host, or if a key leaked, also change the values with
 2. Optionally, keep Grafana's database readable: put the old key from
    `/var/lib/nixos-containers/grafana/var/lib/grafana/secret-key` in `grafana-secret-key`
    with `sops secrets/<host>.yaml`. A different key makes anything Grafana encrypted in its
-   database unreadable, which is only stored data-source and alert secrets, and this repo
-   has none, as its data sources are provisioned without secrets.
+   database unreadable, which is only stored data-source and alert secrets. The ntfy
+   password is one, and is stored again at each start, so nothing is lost.
 3. `just secrets-rekey <host>`, then commit.
 4. `just deploy <host>`. The sudo prompt wants `captain`'s old password, because nothing is
    activated yet. Pi-hole and Grafana restart, so DNS and the dashboards drop briefly.

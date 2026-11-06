@@ -67,6 +67,7 @@
         ./modules/nixos/log-retention.nix
         ./modules/nixos/logging.nix
         ./modules/nixos/minimal.nix
+        ./modules/nixos/ntfy.nix
         ./modules/nixos/pihole.nix
         ./modules/nixos/secrets.nix
         ./hosts/${name}/configuration.nix

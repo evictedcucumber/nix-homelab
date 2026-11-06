@@ -54,6 +54,16 @@ deploy host target=shell("scripts/deploy.sh address $1", host): (_require-hardwa
 deploy-test host target=shell("scripts/deploy.sh address $1", host): (_require-hardware-config host) _known-hosts-dir
     scripts/deploy.sh test {{ host }} {{ target }}
 
+# Print a host's ntfy certificate (PEM), to import into the phone. Public, but root-only on the host
+ntfy-cert host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Type {{ ssh_user }}'s sudo password on {{ host }}; nothing is shown while you do" >&2
+    cert=$(ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo cat /var/lib/nixos-containers/ntfy/var/lib/private/ntfy-sh/tls.crt | tr -d '\r')
+    pem=$(sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' <<< "$cert")
+    [ -n "$pem" ] || { echo "No certificate from {{ host }}: has ntfy started?" >&2; exit 1; }
+    printf '%s\n' "$pem"
+
 # Reboot the host, which also drops a deploy-test
 reboot host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
     ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo systemctl reboot

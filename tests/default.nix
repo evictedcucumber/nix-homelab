@@ -27,6 +27,11 @@ builtins.mapAttrs
       imports = [ ./nspawn/logging.nix ];
       defaults = secrets;
     };
+    ntfy = {
+      imports = [ ./nspawn/ntfy.nix ];
+      node = { inherit specialArgs; };
+      defaults = secrets;
+    };
     pihole = {
       imports = [ ./nspawn/pihole.nix ];
       node = { inherit specialArgs; };
