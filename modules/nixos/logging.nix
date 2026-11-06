@@ -355,9 +355,9 @@ in
           };
       };
 
-      systemd.services =
+      systemd.services = lib.mkMerge [
         # Alloy opens a journal path once, and nspawn only makes a container's after it first starts.
-        lib.listToAttrs (
+        (lib.listToAttrs (
           map (name: {
             name = "container@${name}";
             value.serviceConfig.ExecStartPost = "-${pkgs.writeShellScript "alloy-find-${name}-journal" ''
@@ -369,8 +369,8 @@ in
               fi
             ''}";
           }) containerNames
-        )
-        // {
+        ))
+        {
           alloy.serviceConfig = {
             # A fixed UID for the guard below, which a dynamic user wouldn't have.
             DynamicUser = lib.mkForce false;
@@ -392,7 +392,8 @@ in
               RestartSec = 5;
             };
           };
-        };
+        }
+      ];
 
       users = {
         users.alloy = {
