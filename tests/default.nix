@@ -22,6 +22,7 @@ builtins.mapAttrs
       imports = [ ./nspawn/pihole.nix ];
       node = { inherit specialArgs; };
     };
+    nix-signing = ./nix-signing.nix;
     boot = {
       imports = [ ./boot.nix ];
       node = { inherit specialArgs; };

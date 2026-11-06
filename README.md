@@ -81,9 +81,42 @@ just deploy tcyclops
 just deploy cyclops <address>
 ```
 
-Deploys ask for `captain`'s sudo password on the target. Everything is built in WSL
-and pushed over SSH. The hosts set `max-jobs = 0`, so any build started on one fails,
-including `nixos-rebuild` or `nix-shell` run there.
+A deploy checks SSH first, then builds in WSL, signs the closure with the deploy key, and
+copies it as `captain`. It prints what changed from the running system, then activates with
+`nixos-rebuild --store-path`, which asks for `captain`'s sudo password once and uses it for
+both the profile update and the activation. The hosts set `max-jobs = 0`, so any build
+started on one fails, including `nixos-rebuild` or `nix-shell` run there.
+
+### Signing key
+
+Only root is a trusted Nix user on the hosts, so `captain` can add a store path only if it
+is signed by a key in `trusted-public-keys`. The key is `nix-homelab-1`: its private half
+is `~/.config/nix-homelab/signing.key` and its public half is committed as
+`keys/nix-homelab-signing.pub`.
+
+`just signing-key` creates the private key if it is missing, and never overwrites it. It
+then rewrites the public file from it. Back the private key up somewhere off this machine,
+such as a password manager. Anyone holding it can have a host accept any closure.
+
+If the key is lost, deploys fail with "lacks a signature by a trusted key", because the
+hosts trust only the old public key. A normal deploy can't deliver the new key, so:
+
+1. Move the old key aside, run `just signing-key`, and commit the new public file.
+2. Build the host and copy its closure over as a file, then import it on the host as root,
+   which needs no signature:
+
+   ```bash
+   out=$(nix build --no-link --print-out-paths .#nixosConfigurations.<host>.config.system.build.toplevel)
+   nix-store --export $(nix-store --query --requisites "$out") > closure.nar
+   scp -i ~/.ssh/nix-homelab-control-node.key closure.nar captain@<address>:
+   # on the host:
+   sudo nix-store --import < closure.nar
+   sudo nix-env -p /nix/var/nix/profiles/system --set <out>
+   sudo <out>/bin/switch-to-configuration switch
+   ```
+
+   Later deploys work, since the host now trusts the new key. The `nix-signing` test
+   covers a root import of an unsigned path; the copy and activation steps are untested.
 
 The pre-commit hook checks the staged files with the same formatters and linters
 as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
@@ -463,6 +496,7 @@ Set `TEST_BASE` to compare with another branch.
 | `checks.x86_64-linux.eval`                 | Seconds             | A Nix file changed         |
 | Build `cyclops`, `dcyclops`, `tcyclops`    | Only what changed   | A Nix file changed         |
 | `container-isolation`, `logging`, `pihole` | Under a minute each | A Nix file changed         |
+| `nix-signing`, in QEMU                     | About a minute      | A Nix file changed         |
 | `boot`, in QEMU                            | About a minute      | Its inputs changed, below  |
 
 Nix caches results, so a step the change can't affect takes no time. `boot` runs when

@@ -1,6 +1,8 @@
 # The user when a target is only an address, because it has sudo
 ssh_user := "captain"
 ssh_key := "~/.ssh/nix-homelab-control-node.key"
+export DEPLOY_USER := ssh_user
+signing_key := "~/.config/nix-homelab/signing.key"
 
 # Offer only the control node's key. Keep host keys in their own directory, one file per
 # address, so ~/.ssh/known_hosts is left untouched. A key is trusted the first time, and a
@@ -44,16 +46,16 @@ update input="":
 build host:
     nix build .#nixosConfigurations.{{ host }}.config.system.build.toplevel
 
-# Build locally, activate on the remote host, then offer a reboot if the host needs one
-deploy host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir && (_offer-reboot host target)
-    nixos-rebuild switch --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
+# Build locally, sign, copy and activate on the remote host, then offer a reboot if it needs one
+deploy host target=shell("scripts/deploy.sh address $1", host): (_require-hardware-config host) _known-hosts-dir && (_offer-reboot host target)
+    scripts/deploy.sh switch {{ host }} {{ target }}
 
 # Activate on the remote host until its next reboot, to try a risky change
-deploy-test host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): (_require-hardware-config host) _known-hosts-dir
-    nixos-rebuild test --flake .#{{ host }} --target-host {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} --ask-elevate-password
+deploy-test host target=shell("scripts/deploy.sh address $1", host): (_require-hardware-config host) _known-hosts-dir
+    scripts/deploy.sh test {{ host }} {{ target }}
 
 # Reboot the host, which also drops a deploy-test
-reboot host target=(if host == "dcyclops" { "172.16.1.2" } else if host == "tcyclops" { "172.16.0.2" } else { error("pass a target: just <recipe> " + host + " <address>") }): _known-hosts-dir
+reboot host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
     ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo systemctl reboot
 
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
@@ -64,7 +66,7 @@ iso host out=iso_dir:
 # Build a VM's ISO, create and start the VM on Windows after a UAC prompt, and forget its old host key
 vm-create host *flags: (iso host iso_dir) _known-hosts-dir
     dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
-    rm -f ~/.ssh/known_hosts.d/{{ if host == "dcyclops" { "172.16.1.2" } else { "172.16.0.2" } }}
+    rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})"
 
 # Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
 vm-rebuild host: (vm-create host "-Rebuild")
@@ -82,6 +84,18 @@ vm-forwarding *flags:
 hardware-config host target: _known-hosts-dir
     ssh $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} nixos-generate-config --show-hardware-config > hosts/{{ host }}/hardware-configuration.nix.tmp
     mv hosts/{{ host }}/hardware-configuration.nix.tmp hosts/{{ host }}/hardware-configuration.nix
+
+# Create the deploy signing key if missing, and write its public half to keys/
+signing-key:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    key={{ signing_key }}
+    if [ ! -e "$key" ]; then
+        mkdir -p -m 700 "$(dirname "$key")"
+        (umask 077 && nix key generate-secret --key-name nix-homelab-1 > "$key")
+        echo "Created $key. Back it up: see the README."
+    fi
+    nix key convert-secret-to-public < "$key" > keys/nix-homelab-signing.pub
 
 # Delete local build result links
 clean:

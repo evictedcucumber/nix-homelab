@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   adminUser = "captain";
   # Only set when a user is created. Change it after first boot, see the README.
@@ -26,8 +31,13 @@ in
         "flakes"
       ];
       auto-optimise-store = true;
-      # Lets `nixos-rebuild --target-host` copy locally built, unsigned closures.
-      trusted-users = [ "@wheel" ];
+      # Only root is trusted, so a deploy must arrive signed with the key in keys/.
+      trusted-users = [ "root" ];
+      require-sigs = true;
+      trusted-public-keys = [
+        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+        (lib.trim (builtins.readFile ../../keys/nix-homelab-signing.pub))
+      ];
       # Hosts never build. WSL builds everything, and deploys push it here.
       max-jobs = 0;
     };

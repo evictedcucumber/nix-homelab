@@ -30,7 +30,7 @@ The recommendations are my judgement, not part of the STIG. Passing this audit w
 ## Gaps the STIG doesn't cover
 
 - **Shared default password:** `captain` and `riley` get the same `initialPassword` from `common.nix:5`. It's in the repo and readable in the Nix store, and nothing enforces changing it.
-- **Root-equivalent Nix access:** `trusted-users = [ "@wheel" ]` at `common.nix:30` makes `captain` effectively root through the Nix daemon. The STIG never mentions `trusted-users`.
+- **Root-equivalent Nix access (closed):** only root is a trusted Nix user, so `captain` can add a store path only if it is signed by the deploy key in `keys/`. The `nix-signing` test checks this. Anyone holding the private key can still have a host accept any closure. The STIG never mentions `trusted-users`.
 
 ## Limits of this audit
 
@@ -51,7 +51,7 @@ Sorted by severity (CAT), then ID.
 | V-268131 | I | Not have the telnet package installed. | Default | Check | The repo adds no telnet package, and I found none in the base modules I read. Confirm with `whereis telnet` on a host. |
 | V-268144 | I | Protect the confidentiality and integrity of all information at rest. | Gap | Skip | Your decision on 2026-11-04: no disk encryption for now. Adding LUKS to cyclops after install means a reinstall. |
 | V-268146 | I | Protect wireless access to and from the system using encryption. | Default | Keep | `false`, confirmed with `nix eval`. |
-| V-268154 | I | Prevent the installation of patches, service packs, device drivers, or operating system comp… | Default | Consider | `require-sigs` defaults to true, but `trusted-users = [ "@wheel" ]` at `common.nix:30` exists to accept unsigned closures, so `captain` bypasses it. Signing closures on the control node would close this. |
+| V-268154 | I | Prevent the installation of patches, service packs, device drivers, or operating system comp… | Default | Consider | `require-sigs` is on and only root is trusted, so `captain` can add only closures signed by the deploy key. Deploys sign them on the control node. Covered by the `nix-signing` test. |
 | V-268157 | I | Implement cryptographic mechanisms to protect the integrity of nonlocal maintenance and diag… | Gap | Skip | The defaults are the ETM variants of these MACs plus `umac-128-etm`. The STIG's non-ETM list is weaker, and AEAD ciphers don't use a separate MAC anyway. |
 | V-268159 | I | Protect the confidentiality and integrity of transmitted information. | Met | Keep | `services.openssh.enable = true`: `common.nix:44`. |
 | V-268168 | I | Implement NIST FIPS-validated cryptography for the following: to provision digital signature… | Gap | Skip | `fips=1` doesn't make a NixOS system FIPS-validated, and it may break things like ed25519 keys, which your SSH setup relies on. Only relevant if you have a compliance requirement. |
