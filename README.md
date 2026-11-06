@@ -26,6 +26,8 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `modules/nixos/` | Config shared between hosts, and the unattended installer |
 | `home/`          | Home Manager config for each user                      |
 | `scripts/`       | Hyper-V network and VM setup, and the test runner      |
+| `secrets/`       | Per-host sops files holding the service passwords      |
+| `users/`         | Login password hashes, one `<user>.hash` each          |
 | `tests/`         | NixOS tests, run by `just test`                        |
 | `treefmt.nix`    | Formatters and linters run by `nix fmt`                |
 | `justfile`       | Common commands                                        |
@@ -33,7 +35,7 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 ## Development
 
 Enter the dev shell, which provides `just`, `lefthook`, `nixos-rebuild`, the `nixd`
-language server and the formatters, and installs the Git pre-commit hook:
+language server, `sops`, `age`, `ssh-to-age`, `mkpasswd` and the formatters, and installs the Git pre-commit hook:
 
 ```bash
 nix develop
@@ -52,6 +54,9 @@ Run `just` to list the recipes:
 | `just test [names]`                    | Run the tests a change can affect            |
 | `just update [input]`                  | Update flake inputs                          |
 | `just build <host>`                    | Build a host's system without activating it  |
+| `just set-password <user>`             | Write a login password's hash to `users/`    |
+| `just secrets-init <host>`             | Create a host's secrets file, never replacing |
+| `just secrets-rekey <host> [target]`   | Encrypt a host's secrets for its SSH host key |
 | `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
@@ -189,8 +194,10 @@ remove the old one.
 | `captain` | 1000        | Yes, with password | SSH key, or password at the console |
 | `riley`   | 2000        | No                 | Password at the console only        |
 
-`root` still exists, because NixOS needs it, but every activation locks its password
-and its SSH login is off. Use `sudo` from `captain` instead. Emergency mode needs the
+`root` still exists, because NixOS needs it, but its password is locked (`!`) and its SSH
+login is off. Passwords come from [`users/<name>.hash`](#secrets-and-passwords), and
+`users.mutableUsers = false` makes every activation reset them, so `passwd` changes don't
+last. Use `sudo` from `captain` instead. Emergency mode needs the
 root password, so it won't open. To recover from a bad deploy, boot an earlier
 generation from the boot menu.
 
@@ -216,7 +223,8 @@ Nix daemon. An activation step that writes to the store, such as a custom
 
 - Only `root` and `wheel` can use Nix, so `riley` can't.
 - New passwords need 15 characters, all four character classes and 8 changed characters,
-  and can't be dictionary words. Root only gets a warning, so `sudo passwd` can skip this.
+  and can't be dictionary words. `just set-password` checks the length and classes, because
+  a hash from the repo skips the host's check.
 - `sudo` asks for the password every time.
 - Three failed console logins in 15 minutes lock an account for 15 minutes.
 - More than 30 new SSH connections a minute from one address are dropped.
@@ -313,16 +321,10 @@ dig @172.16.0.3 pi.hole
 
 The web interface is at `https://172.16.0.3/`, or `https://pi.hole/` for clients using
 Pi-hole for DNS. Its certificate is self-signed, so browsers warn about it. The password
-is generated when Pi-hole first starts, and stays out of the Nix store. Read it on the
-host:
-
-```bash
-sudo cat /var/lib/nixos-containers/pihole/var/lib/pihole/web-password.env
-```
-
-To change it, edit that file and run
-`sudo nixos-container run pihole -- systemctl restart pihole-ftl`. Settings are read-only
-in the interface, because they come from this repo.
+is `pihole-web-password` in `secrets/<host>.yaml`, so every start sets it again. Read it
+with `sops -d --extract '["pihole-web-password"]' secrets/<host>.yaml`, and see
+[Secrets and passwords](#secrets-and-passwords) to change it. Settings are read-only in
+the interface, because they come from this repo.
 
 The address is a second address on the host, not a separate interface, because containers
 only get their [`ve-<name>` interface](#containers). The host forwards these ports to the
@@ -375,13 +377,11 @@ nothing outside it can reach Grafana there. As with Pi-hole, the host forwards T
 from private addresses to the container and drops everything else sent to the address.
 
 The interface is at `https://172.16.0.4/`. Its certificate is self-signed, so browsers warn
-about it, and it's made again when the address changes. Sign in as `admin`. The password and
-the key that signs sessions are generated when Grafana first starts, and stay out of the Nix
-store. Read the password on the host:
-
-```bash
-sudo cat /var/lib/nixos-containers/grafana/var/lib/grafana/admin-password
-```
+about it, and it's made again when the address changes. Sign in as `admin`. The password is
+`grafana-admin-password` in `secrets/<host>.yaml`, and the key that signs sessions and
+encrypts Grafana's database is `grafana-secret-key`. Every start sets the admin password
+again, even on an existing database, so a change made in the interface doesn't last. Read
+it with `sops -d --extract '["grafana-admin-password"]' secrets/<host>.yaml`.
 
 Loki is already the default data source, next to Prometheus. The Host logs dashboard shows
 failed SSH logins, `sudo` use, the rate of audit events, and errors by unit. The Containers
@@ -429,8 +429,9 @@ sudo nixos-container run grafana -- journalctl -u loki -u grafana
 ## Setting up the VMs
 
 Do this once per VM. The ISO installs the SSH key from
-`modules/nixos/common.nix`, which is the only way in over SSH. It also sets the user passwords below, for logging
-in at the VM's console.
+`modules/nixos/common.nix`, which is the only way in over SSH. It also sets the user
+passwords from `users/<name>.hash`, for logging in at the VM's console, so
+[set those](#secrets-and-passwords) first.
 
 1. Build the ISO, then create and start the VM. Run this from WSL and approve the
    UAC prompt, because the scripts in `scripts/hyper-v/` need administrator rights:
@@ -462,16 +463,17 @@ in at the VM's console.
    just vm-forwarding
    ```
 
-3. **Change both passwords after first boot.** `captain` and `riley` both start with
-   the password `PleaseChangeMe1`, which is in this repo and readable by anyone on the
-   VM through the Nix store:
+3. **Encrypt the VM's secrets for its new host key, then deploy.** The new install has
+   a new SSH host key, so it can't decrypt `secrets/<host>.yaml` yet, and its Pi-hole and
+   Grafana containers keep restarting until you do. `just deploy` refuses until this is done:
 
    ```bash
-   ssh -t -i ~/.ssh/nix-homelab-control-node.key -o UserKnownHostsFile=~/.ssh/known_hosts.d/172.16.0.2 captain@172.16.0.2 'passwd && sudo passwd riley'
+   just secrets-rekey tcyclops
+   just deploy tcyclops
    ```
 
-   Use `172.16.1.2` for `dcyclops`. New passwords survive deploys, but rebuilding
-   `dcyclops` resets them, so change them again after each rebuild.
+   Commit the changed `.sops.yaml` and `secrets/tcyclops.yaml`. Do the same after every
+   reinstall, including `just vm-rebuild`.
 
 Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
 was when built, and a deploy updates it from there.
@@ -485,6 +487,87 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`:
 ```bash
 just vm-rebuild dcyclops
 ```
+
+## Secrets and passwords
+
+Nothing secret is in the Nix store as plaintext, and no password is set by hand.
+
+| What | Where | How it reaches the host |
+| --- | --- | --- |
+| `captain` and `riley` login passwords | `users/<name>.hash`, yescrypt, in git | `hashedPassword` in `modules/nixos/common.nix` |
+| Grafana admin password and secret key, Pi-hole web password | `secrets/<host>.yaml`, encrypted with sops | sops-nix decrypts them on the host, and a systemd credential carries each into its [container](#containers) |
+
+**Keys.** Each host decrypts with an age key derived from its SSH host key
+(`/etc/ssh/ssh_host_ed25519_key`), which never leaves it. You edit with the admin age key
+in `~/.config/sops/age/keys.txt`, whose public half is the first recipient in
+`.sops.yaml`. **Back that file up somewhere safe, such as a password manager.** Without
+it, nobody can edit the secrets, and the only fix is `just secrets-init` on new files
+and new passwords everywhere. A fixed host key committed to the repo would let anyone read
+the secrets, so the host keys are made on each install instead.
+
+**Login passwords.** The hosts fail to evaluate until both hashes exist:
+
+```bash
+just set-password captain
+just set-password riley
+```
+
+It asks twice, needs 15 characters with all four character classes, and writes the
+hash to `users/<name>.hash`. Commit the files. Run it again to change a password, then
+deploy. The hashes are public, because this repo is, so anyone can try to guess the
+password offline. Use a long random password, such as one from a password manager. The
+hashes stay out of sops so that a fresh install can log in before it has its host key
+rekeyed.
+
+**Service passwords.** `just secrets-init <host>` creates `secrets/<host>.yaml` with random
+values, encrypted for the admin key only, and never replaces a file. Edit or read it
+with:
+
+```bash
+sops secrets/dcyclops.yaml
+sops -d --extract '["grafana-admin-password"]' secrets/dcyclops.yaml
+```
+
+Deploy after an edit. The affected containers restart on their own, and the new values
+replace the old ones, because every start sets them again. No decrypted file belongs in
+the repo, and `.gitignore` blocks the usual names (`*.dec`, `*.decrypted`, `keys.txt`).
+
+**After a reinstall.** A new install has a new host key, which can't decrypt anything yet:
+
+```bash
+just secrets-rekey dcyclops
+```
+
+This fetches the host's public key over SSH, shows its fingerprint and asks you to confirm
+it matches `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the host's console, because
+a first connection can't prove whose key it is. It then replaces the recipient marked
+`# host` in `.sops.yaml`, keeping every other recipient such as a second admin key, and
+re-encrypts `secrets/dcyclops.yaml`. `just vm-create` prints this step. `just deploy`
+checks the host's key is a recipient first and refuses, naming this recipe, if it isn't.
+Both need the dev shell, for `ssh-to-age`.
+A host that has never been rekeyed can't decrypt, so on a fresh install the Pi-hole and
+Grafana containers fail and restart until you do.
+
+Rekeying doesn't change the values, and the old ciphertext stays in git history. After
+reinstalling a compromised host, or if a key leaked, also change the values with
+`sops secrets/<host>.yaml`, then deploy.
+
+**Moving an existing host here.** In this order:
+
+1. Run `just set-password` for `captain` and `riley`, and commit. Evaluation fails without them.
+2. Optionally, keep Grafana's database readable: put the old key from
+   `/var/lib/nixos-containers/grafana/var/lib/grafana/secret-key` in `grafana-secret-key`
+   with `sops secrets/<host>.yaml`. A different key makes anything Grafana encrypted in its
+   database unreadable, which is only stored data-source and alert secrets, and this repo
+   has none, as its data sources are provisioned without secrets.
+3. `just secrets-rekey <host>`, then commit.
+4. `just deploy <host>`. The sudo prompt wants `captain`'s old password, because nothing is
+   activated yet. Pi-hole and Grafana restart, so DNS and the dashboards drop briefly.
+5. Afterwards, the Pi-hole and Grafana passwords are the sops ones, and `captain`'s sudo
+   password is the one from `users/captain.hash`.
+6. Delete what the old design left in the containers' state, which is now unused:
+   `pihole/var/lib/pihole/web-password.env` and `grafana/var/lib/grafana/{admin-password,secret-key}`
+   under `/var/lib/nixos-containers/`.
 
 ## Testing changes
 
@@ -517,6 +600,10 @@ just test boot logging
 host's boot, or to GRUB, isn't covered. The nspawn tests can't check a container's
 `privateUsers`, which they turn off to nest containers, so that's left to building the
 hosts. Pi-hole's lookups and blocklist need an upstream, which the sandbox doesn't have.
+
+The tests decrypt `tests/secrets/secrets.yaml` with the throwaway key beside it, and use
+throwaway login hashes. Their values are public on purpose and protect nothing, so never
+reuse them. The real `users/*.hash` files don't matter to the tests.
 
 The nspawn tests need these settings on the machine that builds, in its `nix.conf`:
 
@@ -575,7 +662,7 @@ just vm-dev destroy
    users.users.captain = {
      isNormalUser = true;
      extraGroups = [ "wheel" ];
-     initialPassword = "PleaseChangeMe1";
+     hashedPassword = "<the contents of users/captain.hash>";
      openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node" ];
    };
    ```
@@ -590,15 +677,10 @@ just vm-dev destroy
 4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
    you installed, and `git add` the changes.
 
-5. Deploy. This creates `riley` with the password `PleaseChangeMe1` and locks `root`.
-   It leaves the password of the existing `captain` user alone:
+5. Create the secrets file if it's missing, encrypt it for the server's SSH host key, and
+   deploy. This creates `riley`, locks `root`, and sets both logins from `users/`:
 
    ```bash
+   just secrets-rekey cyclops <address>
    just deploy cyclops <address>
-   ```
-
-6. Change the passwords:
-
-   ```bash
-   ssh -t -i ~/.ssh/nix-homelab-control-node.key -o UserKnownHostsFile=~/.ssh/known_hosts.d/<address> captain@<address> 'passwd && sudo passwd riley'
    ```

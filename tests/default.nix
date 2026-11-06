@@ -2,9 +2,15 @@
   pkgs,
   blocklist,
   hostModules,
+  sops-nix,
 }:
 let
   specialArgs = { inherit blocklist; };
+  # For modules that take secrets, which the hosts' real keys can't decrypt in a VM.
+  secrets.imports = [
+    sops-nix.nixosModules.sops
+    ./secrets
+  ];
 in
 builtins.mapAttrs
   (
@@ -17,15 +23,23 @@ builtins.mapAttrs
   )
   {
     container-isolation = ./nspawn/container-isolation.nix;
-    logging = ./nspawn/logging.nix;
+    logging = {
+      imports = [ ./nspawn/logging.nix ];
+      defaults = secrets;
+    };
     pihole = {
       imports = [ ./nspawn/pihole.nix ];
       node = { inherit specialArgs; };
+      defaults = secrets;
     };
     nix-signing = ./nix-signing.nix;
     boot = {
       imports = [ ./boot.nix ];
       node = { inherit specialArgs; };
       nodes.machine.imports = hostModules "dcyclops";
+      defaults.imports = [
+        ./secrets
+        ./secrets/users.nix
+      ];
     };
   }

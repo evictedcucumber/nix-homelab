@@ -17,6 +17,10 @@ let
   alloyUid = 399;
   inherit (config.logging) lanAddress;
   privateRanges = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }";
+  credentials = [
+    "grafana-admin-password"
+    "grafana-secret-key"
+  ];
 
   dashboards = pkgs.symlinkJoin {
     name = "grafana-dashboards";
@@ -176,16 +180,26 @@ in
 
   config = lib.mkMerge [
     {
+      # The container gets them as system credentials, because its dynamic UID range hides
+      # who owns a file on the host.
+      sops.secrets = lib.genAttrs credentials (_: {
+        restartUnits = [ "container@grafana.service" ];
+      });
+
       containers.grafana = {
         localAddress = address;
+        extraFlags = map (id: "--load-credential=${id}:${config.sops.secrets.${id}.path}") credentials;
         config =
           { config, pkgs, ... }:
           let
             cfg = config.services.grafana;
             tlsCert = "${cfg.dataDir}/tls.crt";
             tlsKey = "${cfg.dataDir}/tls.key";
-            secretKeyFile = "${cfg.dataDir}/secret-key";
-            passwordFile = "${cfg.dataDir}/admin-password";
+            credentialsDir = "/run/credentials/grafana.service";
+            # The config file the nixpkgs unit starts Grafana with.
+            configFile = lib.last (
+              lib.splitString " -config " config.systemd.services.grafana.serviceConfig.ExecStart
+            );
             openssl = lib.getExe pkgs.openssl;
             checkAddress = if lanAddress != null then lanAddress else address;
           in
@@ -271,10 +285,9 @@ in
                   domain = lanAddress;
                   root_url = "https://${lanAddress}/";
                 };
-                # Made below, and kept out of the Nix store.
                 security = {
-                  secret_key = "$__file{${secretKeyFile}}";
-                  admin_password = "$__file{${passwordFile}}";
+                  secret_key = "$__file{${credentialsDir}/grafana-secret-key}";
+                  admin_password = "$__file{${credentialsDir}/grafana-admin-password}";
                   cookie_secure = true;
                   disable_gravatar = true;
                 };
@@ -328,15 +341,23 @@ in
               };
             };
 
+            systemd.services.grafana.serviceConfig = {
+              ImportCredential = credentials;
+              # Grafana only reads admin_password when it creates its database, so an existing one is
+              # reset to it on each start.
+              ExecStartPre = lib.mkAfter [
+                (pkgs.writeShellScript "grafana-reset-admin-password" ''
+                  [ -e ${cfg.settings.database.path} ] || exit 0
+                  exec ${lib.getExe cfg.package} cli --homepath ${cfg.dataDir} --config ${configFile} \
+                    admin reset-admin-password --password-from-stdin \
+                    < "$CREDENTIALS_DIRECTORY/grafana-admin-password"
+                '')
+              ];
+            };
+
             # Grafana needs a certificate to start, and doesn't make one.
             systemd.services.grafana.preStart = ''
               umask 077
-              for file in ${secretKeyFile} ${passwordFile}; do
-                if [ ! -s "$file" ]; then
-                  value=$(${openssl} rand -hex 24)
-                  printf %s "$value" > "$file"
-                fi
-              done
 
               # Made again when it's about to expire, or the host's address changes.
               certificate_valid() {

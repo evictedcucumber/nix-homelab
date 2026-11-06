@@ -33,6 +33,37 @@ let
 
   d = hosts.dcyclops;
 
+  # A key sops leaves in the clear, with its value encrypted.
+  encrypted = file: key: lib.hasInfix "\n${key}: ENC[" ("\n" + builtins.readFile file);
+  secretsCase =
+    name: host:
+    let
+      missing = lib.filter (s: !encrypted s.sopsFile s.name) (lib.attrValues host.config.sops.secrets);
+    in
+    {
+      name = "${name}'s secrets file is encrypted and holds every secret";
+      ok = missing == [ ];
+      detail = "missing or unencrypted: ${toString (map (s: s.name) missing)}";
+    };
+
+  # The tests' throwaway key must never stand in for a real host's secrets.
+  realSecretsCase =
+    name: host:
+    let
+      files = [
+        host.config.sops.defaultSopsFile
+      ]
+      ++ map (s: s.sopsFile) (lib.attrValues host.config.sops.secrets);
+      stray = lib.filter (f: lib.hasInfix "/tests/" (toString f)) files;
+    in
+    {
+      name = "${name} reads its secrets from secrets/, not tests/";
+      ok =
+        stray == [ ]
+        && toString host.config.sops.defaultSopsFile == toString (../../secrets + "/${name}.yaml");
+      detail = "files: ${toString (map toString files)}";
+    };
+
   cases = [
     (mkCase "cyclops passes" hosts.cyclops [ ] null)
     (mkCase "dcyclops passes" hosts.dcyclops [ ] null)
@@ -69,6 +100,26 @@ let
     (mkCase "captain without an SSH key" d [
       { users.users.captain.openssh.authorizedKeys.keys = lib.mkForce [ ]; }
     ] "Add an SSH public key")
+
+    (mkCase "captain without a password hash" d [
+      { users.users.captain.hashedPassword = lib.mkForce null; }
+    ] "just set-password captain")
+    (mkCase "riley with a sha512 hash" d [
+      { users.users.riley.hashedPassword = lib.mkForce "$6$salt$hash"; }
+    ] "just set-password riley")
+    (mkCase "both logins without a hash" d [
+      {
+        users.users.captain.hashedPassword = lib.mkForce null;
+        users.users.riley.hashedPassword = lib.mkForce "";
+      }
+    ] "just set-password captain', run 'just set-password riley")
+
+    (secretsCase "cyclops" hosts.cyclops)
+    (secretsCase "dcyclops" hosts.dcyclops)
+    (secretsCase "tcyclops" hosts.tcyclops)
+    (realSecretsCase "cyclops" hosts.cyclops)
+    (realSecretsCase "dcyclops" hosts.dcyclops)
+    (realSecretsCase "tcyclops" hosts.tcyclops)
 
     (mkCase "pihole.lanAddress not on an interface" d [
       { pihole.lanAddress = lib.mkForce "172.16.9.9"; }

@@ -15,6 +15,7 @@ let
   };
   inherit (config.pihole) lanAddress;
   privateRanges = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }";
+  credential = "pihole-web-password";
 in
 {
   options.pihole.lanAddress = lib.mkOption {
@@ -26,13 +27,17 @@ in
 
   config = lib.mkMerge [
     {
+      # The container gets it as a system credential, because its dynamic UID range hides
+      # who owns a file on the host.
+      sops.secrets.${credential}.restartUnits = [ "container@pihole.service" ];
+
       containers.pihole = {
         localAddress = address;
+        extraFlags = [ "--load-credential=${credential}:${config.sops.secrets.${credential}.path}" ];
         config =
           { config, pkgs, ... }:
           let
             cfg = config.services.pihole-ftl;
-            passwordFile = "${cfg.stateDirectory}/web-password.env";
           in
           {
             containerFirewall.allowDns = true;
@@ -105,8 +110,20 @@ in
               restartTriggers = [ blocklistFile ];
               serviceConfig = {
                 Restart = lib.mkForce "always";
-                # Made below, and kept out of the Nix store.
-                EnvironmentFile = "-${passwordFile}";
+                # The host passes it in as a system credential, which stays out of the Nix store.
+                ImportCredential = credential;
+                # The nixpkgs command, with the password in FTL's environment. That also makes it
+                # win over the one in an existing pihole.toml on every start.
+                ExecStart = lib.mkForce (
+                  pkgs.writeShellScript "pihole-ftl-start" ''
+                    set -eu
+                    password=$(< "$CREDENTIALS_DIRECTORY/${credential}")
+                    # FTL runs without a password if this is empty, so stop instead.
+                    [ -n "$password" ]
+                    export FTLCONF_webserver_api_password=$password
+                    exec ${lib.getExe cfg.package} no-daemon
+                  ''
+                );
               };
               preStart =
                 let
@@ -117,12 +134,6 @@ in
                   if [ ! -e ${gravity} ]; then
                     ${lib.getExe cfg.package} sqlite3 -ni ${gravity} < ${cfg.piholePackage}/share/pihole/advanced/Templates/gravity.db.sql
                     ${lib.getExe cfg.package} sqlite3 -ni ${gravity} "INSERT INTO info VALUES ('updated', 0), ('gravity_count', 0), ('antigravity_count', 0);"
-                  fi
-                  # FTL runs without a password if this is empty, so stop instead.
-                  if [ ! -s ${passwordFile} ]; then
-                    password=$(${pkgs.coreutils}/bin/head -c 18 /dev/urandom | ${pkgs.coreutils}/bin/base64)
-                    [ -n "$password" ]
-                    (umask 077; echo "FTLCONF_webserver_api_password=$password" > ${passwordFile})
                   fi
                 '';
             };

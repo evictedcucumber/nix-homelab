@@ -50,6 +50,9 @@ target=${3:-$(default_address "$host")}
 # shellcheck disable=SC2086,SC2029
 ssh $NIX_SSHOPTS "$target" true
 
+# The host can only decrypt its secrets if they're encrypted for its current SSH host key.
+"$(dirname "$0")/secrets.sh" check "$host" "$target"
+
 out=$(nix build --no-link --print-out-paths ".#nixosConfigurations.$host.config.system.build.toplevel")
 nix store sign --recursive --key-file "$key" "$out"
 nix copy --to "ssh-ng://$target" "$out"

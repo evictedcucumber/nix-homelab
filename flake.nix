@@ -21,6 +21,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Hosts can't download lists, so the blocklist arrives with each deploy.
     blocklist = {
       url = "git+https://github.com/zachlagden/Pi-hole-Optimized-Blocklists?lfs=1&shallow=1";
@@ -36,6 +41,7 @@
       disko,
       home-manager,
       treefmt-nix,
+      sops-nix,
       blocklist,
     }:
     let
@@ -51,6 +57,7 @@
         }
         disko.nixosModules.disko
         home-manager.nixosModules.home-manager
+        sops-nix.nixosModules.sops
         ./modules/nixos/common.nix
         ./modules/nixos/containers.nix
         ./modules/nixos/dns.nix
@@ -61,6 +68,7 @@
         ./modules/nixos/logging.nix
         ./modules/nixos/minimal.nix
         ./modules/nixos/pihole.nix
+        ./modules/nixos/secrets.nix
         ./hosts/${name}/configuration.nix
       ];
 
@@ -117,7 +125,7 @@
 
       # Not checks, because `nix flake check` would then need uid-range. `just test` runs these.
       legacyPackages.x86_64-linux.tests = import ./tests {
-        inherit blocklist hostModules;
+        inherit blocklist hostModules sops-nix;
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
 
@@ -151,10 +159,15 @@
         {
           default = pkgs.mkShellNoCC {
             packages = [
+              pkgs.age
               pkgs.just
               pkgs.lefthook
+              pkgs.mkpasswd
               pkgs.nixd
               pkgs.nixos-rebuild
+              pkgs.sops
+              pkgs.ssh-to-age
+              pkgs.yq-go
               treefmt.config.build.wrapper
             ];
             shellHook = "lefthook install > /dev/null";

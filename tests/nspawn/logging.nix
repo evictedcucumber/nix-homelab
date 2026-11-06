@@ -28,6 +28,9 @@ in
   };
 
   testScript = ''
+    import json
+    import shlex
+
     start_all()
     machine.wait_for_unit("container@grafana.service")
     machine.wait_until_succeeds("curl -sf --max-time 2 http://10.233.0.3:3100/ready", timeout=120)
@@ -70,6 +73,33 @@ in
 
     with subtest("the host reaches Grafana on its LAN address"):
         machine.succeed("curl -skf --max-time 5 https://${lanAddress}/api/health")
+
+    # The password sops decrypted on the host, which the container got as a credential.
+    password = machine.succeed("cat /run/secrets/grafana-admin-password")
+    assert password
+
+    def grafana(password, path="api/org", data=None):
+        method = f"-X PUT -H 'Content-Type: application/json' -d {shlex.quote(json.dumps(data))}" if data else ""
+        return machine.execute(
+            f"curl -sk --max-time 5 -o /dev/null -w '%{{http_code}}' -u {shlex.quote('admin:' + password)} {method} https://${lanAddress}/{path}"
+        )[1]
+
+    with subtest("Grafana accepts the admin password from the secrets file"):
+        assert grafana(password) == "200"
+
+    with subtest("Grafana rejects another password"):
+        assert grafana(password + "x") == "401"
+
+    # The database already has a password after the first start, which Grafana wouldn't read
+    # from its config again.
+    with subtest("a restart resets a changed admin password to the secret"):
+        changed = {"oldPassword": password, "newPassword": "changed-password", "confirmNew": "changed-password"}
+        assert grafana(password, "api/user/password", changed) == "200"
+        assert grafana("changed-password") == "200"
+        machine.succeed("systemctl restart container@grafana.service")
+        machine.wait_until_succeeds("curl -skf --max-time 5 https://${lanAddress}/api/health", timeout=120)
+        assert grafana(password) == "200"
+        assert grafana("changed-password") == "401"
 
     with subtest("the LAN address only exposes Grafana"):
         client.fail("curl -s --max-time 3 telnet://${lanAddress}:22")

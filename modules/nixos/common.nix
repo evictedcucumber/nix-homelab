@@ -1,13 +1,31 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
   adminUser = "captain";
-  # Only set when a user is created. Change it after first boot, see the README.
-  defaultPassword = "PleaseChangeMe1";
+  # Hashes are public, so the check stops a weak scheme and a missing file.
+  hashFile = name: ../../users + "/${name}.hash";
+  passwordHash =
+    name:
+    let
+      file = hashFile name;
+    in
+    if builtins.pathExists file then lib.trim (builtins.readFile file) else null;
+  badLogins =
+    lib.filter
+      (
+        name:
+        let
+          hash = config.users.users.${name}.hashedPassword;
+        in
+        hash == null || !lib.hasPrefix "$y$" hash
+      )
+      [
+        adminUser
+        "riley"
+      ];
 in
 {
   time.timeZone = "Africa/Johannesburg";
@@ -80,7 +98,7 @@ in
     uid = 1000;
     group = adminUser;
     extraGroups = [ "wheel" ];
-    initialPassword = defaultPassword;
+    hashedPassword = passwordHash adminUser;
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node"
     ];
@@ -90,7 +108,7 @@ in
     isNormalUser = true;
     uid = 2000;
     group = "riley";
-    initialPassword = defaultPassword;
+    hashedPassword = passwordHash "riley";
   };
 
   users.groups = {
@@ -98,14 +116,17 @@ in
     riley.gid = 2000;
   };
 
-  # NixOS needs a root account, so lock it instead. Passwords here are mutable, so
-  # locking it has to happen on every activation to catch one set by a manual install.
-  system.activationScripts.lockRoot = {
-    deps = [ "users" ];
-    text = "${pkgs.shadow}/bin/passwd --lock root >/dev/null";
-  };
+  users.mutableUsers = false;
+  # NixOS needs a root account, so lock it.
+  users.users.root.hashedPassword = "!";
 
   assertions = [
+    {
+      assertion = badLogins == [ ];
+      message = "Login passwords are yescrypt hashes in users/<name>.hash, and these are missing or aren't ($y$): ${
+        lib.concatMapStringsSep ", " (name: "run 'just set-password ${name}'") badLogins
+      }.";
+    }
     {
       assertion = config.users.users.${adminUser}.openssh.authorizedKeys.keys != [ ];
       message = "Add an SSH public key for ${adminUser} in modules/nixos/common.nix: password and root SSH logins are disabled, so deploying without one locks you out.";

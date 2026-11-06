@@ -11,3 +11,14 @@ result-*
 
 # Ignore auto-install ISOs written by `just iso`
 *.iso
+
+# Never commit anything decrypted: a secrets file stays sops-encrypted, and only `*.yaml` is kept
+/secrets/*
+!/secrets/*.yaml
+*.dec
+*.dec.*
+*.decrypted
+*.decrypted.*
+
+# Ignore age private keys, such as the admin one if it is copied into the repo
+keys.txt

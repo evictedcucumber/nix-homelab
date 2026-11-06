@@ -1,0 +1,21 @@
+# Who can decrypt each secrets file. The admin key is the first recipient of every host's
+# file, then `just secrets-rekey <host>` adds the host's own key, derived from its SSH host
+# key. A host with only the admin key can't decrypt yet.
+creation_rules:
+  - path_regex: ^secrets/cyclops\.yaml$
+    key_groups:
+      - age:
+          - age1h2xv8av7hpl4y0kyuq2yup24unl29ch8dvzpa4mamwe4vpe22pjsa8e6u3
+  - path_regex: ^secrets/dcyclops\.yaml$
+    key_groups:
+      - age:
+          - age1h2xv8av7hpl4y0kyuq2yup24unl29ch8dvzpa4mamwe4vpe22pjsa8e6u3
+  - path_regex: ^secrets/tcyclops\.yaml$
+    key_groups:
+      - age:
+          - age1h2xv8av7hpl4y0kyuq2yup24unl29ch8dvzpa4mamwe4vpe22pjsa8e6u3
+  # A throwaway key for the VM tests, which is committed in tests/secrets/.
+  - path_regex: ^tests/secrets/.*\.yaml$
+    key_groups:
+      - age:
+          - age1ew82jxe8nluyt6exedaqcjhr28fnc6uzkz585z6a2gqcm50hed5qxa3n4v

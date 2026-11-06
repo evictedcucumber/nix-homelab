@@ -67,6 +67,7 @@ iso host out=iso_dir:
 vm-create host *flags: (iso host iso_dir) _known-hosts-dir
     dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
     rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})"
+    @echo "{{ host }} has a new SSH host key, so it can't decrypt its secrets yet. Once it has booted, run 'just secrets-rekey {{ host }}' and then 'just deploy {{ host }}'."
 
 # Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
 vm-rebuild host: (vm-create host "-Rebuild")
@@ -96,6 +97,32 @@ signing-key:
         echo "Created $key. Back it up: see the README."
     fi
     nix key convert-secret-to-public < "$key" > keys/nix-homelab-signing.pub
+
+# Create secrets/<host>.yaml with new random passwords, encrypted for the admin key; never overwrites
+secrets-init host:
+    scripts/secrets.sh init {{ host }}
+
+# Encrypt a host's secrets for its current SSH host key, fetched over SSH, so it can decrypt them after a reinstall
+secrets-rekey host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
+    scripts/secrets.sh rekey {{ host }} {{ target }}
+
+# Ask for a login password twice, then write its yescrypt hash to users/<user>.hash for the repo
+[arg("user", pattern="[a-z][a-z0-9_-]*")]
+set-password user:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -r -s -p "New password for {{ user }}: " first; echo
+    read -r -s -p "Repeat it: " second; echo
+    [ "$first" = "$second" ] || { echo "The passwords differ" >&2; exit 1; }
+    # What the hosts' pwquality asks of passwords, which a hash from the repo skips.
+    if [ "${#first}" -lt 15 ] || [[ ! $first =~ [A-Z] ]] || [[ ! $first =~ [a-z] ]] || [[ ! $first =~ [0-9] ]] || [[ ! $first =~ [^A-Za-z0-9] ]]; then
+        echo "Use at least 15 characters with upper and lower case, a digit and a symbol: the hash is public, so only the password protects it" >&2
+        exit 1
+    fi
+    mkdir -p users
+    printf %s "$first" | mkpasswd --method=yescrypt --stdin > users/{{ user }}.hash.tmp
+    mv users/{{ user }}.hash.tmp users/{{ user }}.hash
+    echo "Wrote users/{{ user }}.hash. Run 'git add users/{{ user }}.hash' (flakes only see tracked files), commit it, then deploy to apply it."
 
 # Delete local build result links
 clean:
