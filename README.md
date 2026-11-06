@@ -460,6 +460,7 @@ Set `TEST_BASE` to compare with another branch.
 
 | Step                                       | Without KVM         | Runs when                  |
 | ------------------------------------------ | ------------------- | -------------------------- |
+| `checks.x86_64-linux.eval`                 | Seconds             | A Nix file changed         |
 | Build `cyclops`, `dcyclops`, `tcyclops`    | Only what changed   | A Nix file changed         |
 | `container-isolation`, `logging`, `pihole` | Under a minute each | A Nix file changed         |
 | `boot`, in QEMU                            | About a minute      | Its inputs changed, below  |
@@ -467,6 +468,10 @@ Set `TEST_BASE` to compare with another branch.
 Nix caches results, so a step the change can't affect takes no time. `boot` runs when
 `tests/boot.nix` or `dcyclops`'s kernel, initrd, stage 2, kernel modules or parameters,
 sysctls or file systems change.
+
+`eval` (in `tests/eval/`) breaks one thing at a time in `dcyclops` and checks that the
+matching assertion fails, and that no real host fails any. It needs no VM or KVM, so
+`nix flake check` runs it too.
 
 Name tests to run only those, whether anything changed or not:
 

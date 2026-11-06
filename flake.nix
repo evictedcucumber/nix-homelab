@@ -130,12 +130,21 @@
 
       formatter = forAllSystems ({ treefmt, ... }: treefmt.config.build.wrapper);
 
-      checks = forAllSystems (
-        { treefmt, ... }:
-        {
-          formatting = treefmt.config.build.check self;
-        }
-      );
+      checks =
+        nixpkgs.lib.recursiveUpdate
+          (forAllSystems (
+            { treefmt, ... }:
+            {
+              formatting = treefmt.config.build.check self;
+            }
+          ))
+          {
+            x86_64-linux.eval = import ./tests/eval {
+              inherit (nixpkgs) lib;
+              pkgs = nixpkgs.legacyPackages.x86_64-linux;
+              hosts = self.nixosConfigurations;
+            };
+          };
 
       devShells = forAllSystems (
         { pkgs, treefmt }:
