@@ -44,6 +44,9 @@ in
     with subtest("Grafana answers over TLS on its LAN address"):
         client.wait_until_succeeds("curl -skf --max-time 5 https://${lanAddress}/api/health", timeout=120)
 
+    with subtest("the host reaches Grafana on its LAN address"):
+        machine.succeed("curl -skf --max-time 5 https://${lanAddress}/api/health")
+
     with subtest("the LAN address only exposes Grafana"):
         client.fail("curl -s --max-time 3 telnet://${lanAddress}:22")
   '';

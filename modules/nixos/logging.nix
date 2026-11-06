@@ -303,7 +303,8 @@ in
         }
       ];
 
-      # The drop keeps the host's own services, such as SSH, off this address.
+      # The drop keeps the host's own services, such as SSH, off this address. The output chain
+      # covers the host itself, whose traffic to its own address skips prerouting.
       networking.nftables.tables.logging-dnat = {
         family = "ip";
         content = ''
@@ -313,10 +314,17 @@ in
             iifname != "lo" iifname != "ve-*" ip daddr ${lanAddress} ip saddr ${privateRanges} tcp dport 443 dnat to ${address}:${toString grafanaPort}
           }
 
+          chain output {
+            type nat hook output priority dstnat; policy accept;
+
+            ip daddr ${lanAddress} tcp dport 443 dnat to ${address}:${toString grafanaPort}
+          }
+
           chain input {
             type filter hook input priority filter - 1; policy accept;
 
-            iifname != "lo" ip daddr ${lanAddress} drop
+            # Grafana's replies to the host come back on ve-grafana.
+            iifname != "lo" ct state != { established, related } ip daddr ${lanAddress} drop
           }
         '';
       };
