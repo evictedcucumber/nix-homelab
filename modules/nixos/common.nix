@@ -49,12 +49,13 @@ in
         "flakes"
       ];
       auto-optimise-store = true;
-      # Only root is trusted, so a deploy must arrive signed with the key in keys/.
+      # Only root is trusted, so a deploy must arrive signed with a key in keys/.
       trusted-users = [ "root" ];
       require-sigs = true;
       trusted-public-keys = [
         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
         (lib.trim (builtins.readFile ../../keys/nix-homelab-signing.pub))
+        (lib.trim (builtins.readFile ../../keys/nix-homelab-signing-backup.pub))
       ];
       # Hosts never build. WSL builds everything, and deploys push it here.
       max-jobs = 0;

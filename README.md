@@ -97,13 +97,27 @@ started on one fails, including `nixos-rebuild` or `nix-shell` run there.
 Only root is a trusted Nix user on the hosts, so `captain` can add a store path only if it
 is signed by a key in `trusted-public-keys`. The key is `nix-homelab-1`: its private half
 is `~/.config/nix-homelab/signing.key` and its public half is committed as
-`keys/nix-homelab-signing.pub`.
+`keys/nix-homelab-signing.pub`. A second, backup key `nix-homelab-2` is trusted as well,
+with its public half in `keys/nix-homelab-signing-backup.pub`. Its private half is kept
+offline only (password manager), never on the control node.
 
 `just signing-key` creates the private key if it is missing, and never overwrites it. It
 then rewrites the public file from it. Back the private key up somewhere off this machine,
 such as a password manager. Anyone holding it can have a host accept any closure.
 
-If the key is lost, deploys fail with "lacks a signature by a trusted key", because the
+If the main key leaks or is lost, the backup key lets you deploy and replace it:
+
+1. Move the old main key aside, run `just signing-key`, and commit the new
+   `keys/nix-homelab-signing.pub`. The old public key is now gone from the config.
+2. Deploy to every host signed by the backup key, with its private half restored to a
+   temporary file: `NIX_HOMELAB_SIGNING_KEY=/path/to/backup.key just deploy <host>`. The
+   hosts still trust the backup key, and the deploy delivers the new main key. Delete the
+   temporary file afterwards.
+3. If the backup key was used on an untrusted machine, or leaked itself, generate a new one
+   with `nix key generate-secret --key-name nix-homelab-3`, store it offline, swap
+   `keys/nix-homelab-signing-backup.pub` for its public half, and deploy again.
+
+If both keys are lost, deploys fail with "lacks a signature by a trusted key", because the
 hosts trust only the old public key. A normal deploy can't deliver the new key, so:
 
 1. Move the old key aside, run `just signing-key`, and commit the new public file.
