@@ -104,7 +104,7 @@ signing-key:
     if [ ! -e "$key" ]; then
         mkdir -p -m 700 "$(dirname "$key")"
         (umask 077 && nix key generate-secret --key-name nix-homelab-1 > "$key")
-        echo "Created $key. Back it up: see the README."
+        echo "Created $key. Back it up: see manual-setup.md."
     fi
     nix key convert-secret-to-public < "$key" > keys/nix-homelab-signing.pub
 
