@@ -9,7 +9,7 @@ in
     machine = {
       imports = [
         ./host.nix
-        ../../modules/nixos/logging.nix
+        ../../modules/containers/grafana
         ../../modules/containers/ntfy
         ../../modules/containers/pihole
       ];

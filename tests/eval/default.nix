@@ -18,6 +18,11 @@ let
     config = { };
   };
 
+  monitoredContainer = address: {
+    localAddress = address;
+    config.imports = [ ../../modules/containers/guest/monitoring.nix ];
+  };
+
   # Fails when no failing assertion contains `expect`, or when `expect` is null and any does.
   mkCase =
     name: host: modules: expect:
@@ -139,9 +144,9 @@ let
     (mkCase "pihole's LAN address not on an interface" d [
       { containers.pihole.lan.address = lib.mkForce "172.16.9.9"; }
     ] "containers.pihole.lan.address")
-    (mkCase "logging.lanAddress not on an interface" d [
-      { logging.lanAddress = lib.mkForce "172.16.9.9"; }
-    ] "logging.lanAddress")
+    (mkCase "grafana's LAN address not on an interface" d [
+      { containers.grafana.lan.address = lib.mkForce "172.16.9.9"; }
+    ] "containers.grafana.lan.address")
     (mkCase "ntfy's LAN address not on an interface" d [
       { containers.ntfy.lan.address = lib.mkForce "172.16.9.9"; }
     ] "containers.ntfy.lan.address")
@@ -152,8 +157,8 @@ let
     (mkCase "container names with one Alloy component name" d [
       {
         containers = {
-          "a-b" = container "10.233.0.20";
-          "a_b" = container "10.233.0.21";
+          "a-b" = monitoredContainer "10.233.0.20";
+          "a_b" = monitoredContainer "10.233.0.21";
         };
       }
     ] "same Alloy component name")

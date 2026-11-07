@@ -8,9 +8,9 @@ in
     machine = {
       imports = [
         ./host.nix
-        ../../modules/nixos/logging.nix
+        ../../modules/containers/grafana
       ];
-      logging = { inherit lanAddress; };
+      containers.grafana.lan.address = lanAddress;
       virtualisation.vlans = [ 1 ];
       networking.interfaces.eth1.ipv4.addresses = [
         {

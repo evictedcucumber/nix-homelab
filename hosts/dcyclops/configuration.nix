@@ -27,6 +27,6 @@
   };
 
   containers.pihole.lan.address = "172.16.1.3";
-  logging.lanAddress = "172.16.1.4";
+  containers.grafana.lan.address = "172.16.1.4";
   containers.ntfy.lan.address = "172.16.1.5";
 }
