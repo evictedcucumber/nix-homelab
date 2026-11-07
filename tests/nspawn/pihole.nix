@@ -9,7 +9,7 @@ in
     {
       imports = [
         ./host.nix
-        ../../modules/nixos/pihole.nix
+        ../../modules/containers/pihole
       ];
       environment.systemPackages = [ pkgs.dig ];
     };

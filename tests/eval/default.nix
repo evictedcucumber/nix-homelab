@@ -136,9 +136,9 @@ let
     (limitCase "dcyclops" hosts.dcyclops)
     (limitCase "tcyclops" hosts.tcyclops)
 
-    (mkCase "pihole.lanAddress not on an interface" d [
-      { pihole.lanAddress = lib.mkForce "172.16.9.9"; }
-    ] "pihole.lanAddress")
+    (mkCase "pihole's LAN address not on an interface" d [
+      { containers.pihole.lan.address = lib.mkForce "172.16.9.9"; }
+    ] "containers.pihole.lan.address")
     (mkCase "logging.lanAddress not on an interface" d [
       { logging.lanAddress = lib.mkForce "172.16.9.9"; }
     ] "logging.lanAddress")

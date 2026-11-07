@@ -11,7 +11,7 @@ in
         ./host.nix
         ../../modules/nixos/logging.nix
         ../../modules/nixos/ntfy.nix
-        ../../modules/nixos/pihole.nix
+        ../../modules/containers/pihole
       ];
       ntfy = { inherit lanAddress; };
       virtualisation.vlans = [ 1 ];

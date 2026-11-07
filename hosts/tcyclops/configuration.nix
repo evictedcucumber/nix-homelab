@@ -26,7 +26,7 @@
     defaultGateway = "172.16.0.1";
   };
 
-  pihole.lanAddress = "172.16.0.3";
+  containers.pihole.lan.address = "172.16.0.3";
   logging.lanAddress = "172.16.0.4";
   ntfy.lanAddress = "172.16.0.5";
 }
