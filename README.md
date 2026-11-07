@@ -33,6 +33,8 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `flake.nix`       | Hosts, install ISOs, dev shell, formatter and checks                     |
 | `hosts/<name>/`   | Per-host configuration                                                   |
 | `modules/nixos/`  | Config shared between hosts, and the unattended installer                |
+| `modules/containers/` | The container framework, the in-container modules, and each container |
+| `templates/`      | `container`, a skeleton for a new container                              |
 | `home/`           | Home Manager config for each user                                        |
 | `scripts/`        | `deploy.sh`, `secrets.sh`, `check-secrets.sh`, the test runner, and Hyper-V network and VM setup |
 | `secrets/`        | Per-host sops files holding the service passwords                        |
@@ -213,9 +215,9 @@ Pi-hole, Grafana and ntfy each have an address of their own on the host's networ
 
 | Service              | Option               | `tcyclops`   | `dcyclops`   | `cyclops` |
 | -------------------- | -------------------- | ------------ | ------------ | --------- |
-| [Pi-hole](#pi-hole)  | `pihole.lanAddress`  | `172.16.0.3` | `172.16.1.3` | none yet  |
-| [Grafana](#logging)  | `logging.lanAddress` | `172.16.0.4` | `172.16.1.4` | none yet  |
-| [ntfy](#alerts-ntfy) | `ntfy.lanAddress`    | `172.16.0.5` | `172.16.1.5` | none yet  |
+| [Pi-hole](#pi-hole)  | `containers.pihole.lan.address`  | `172.16.0.3` | `172.16.1.3` | none yet  |
+| [Grafana](#logging)  | `containers.grafana.lan.address` | `172.16.0.4` | `172.16.1.4` | none yet  |
+| [ntfy](#alerts-ntfy) | `containers.ntfy.lan.address`    | `172.16.0.5` | `172.16.1.5` | none yet  |
 
 It is a second address on the host, not a separate interface, because containers only get
 their [`ve-<name>` interface](#containers). The host forwards the service's ports from
@@ -282,7 +284,7 @@ plain DNS fallback, and the firewall blocks outbound port 53. `chrony` uses
 
 ## Containers
 
-`modules/nixos/containers.nix` sets up
+`modules/containers/framework/` sets up
 [NixOS containers](https://nixos.org/manual/nixos/stable/#ch-containers). Nothing changes
 on a host until it declares one in its `configuration.nix`, which only needs a unique
 address in `10.233.0.0/24` (the host is `10.233.0.1`) and a name of up to 11 characters.
@@ -305,6 +307,28 @@ at the host. Open a shell in one from the host:
 ```bash
 sudo nixos-container root-login web
 ```
+
+The framework also adds options to each container, besides the NixOS ones:
+
+| Option                                | Effect                                                              |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| `containers.<name>.lan`               | `address`, `ports` and `fromHost`: forwards ports from the host's network, in a `<name>-dnat` nftables table |
+| `containers.<name>.credentials`       | Sops secret ids, loaded into the container under the same names     |
+| `containers.<name>.restartAlways`     | Restarts the container when it stops, true by default               |
+
+Every container also imports `modules/containers/guest/base.nix`, which sets up its firewall,
+log retention and minimal profile. A container opts in to
+`guest/monitoring.nix` to have Alloy ship its journal, and to `guest/tls.nix` for a self-signed
+certificate.
+
+### Adding a container
+
+1. Copy `templates/container/` to `modules/containers/<name>/` and replace `example`.
+2. Pick an unused address in `10.233.0.0/24`, and set it as `localAddress`.
+3. Add the directory to the imports in `modules/containers/default.nix`.
+4. To reach it from the host's network, list its `lan.ports` and set
+   `containers.<name>.lan.address` on a host.
+5. Import `../guest/monitoring.nix` in its `config` to have its logs shipped.
 
 Each container has its own firewall, inside the container, which drops everything in and
 out, including DNS. Outbound traffic has to pass both that firewall and the host's, so
@@ -343,7 +367,7 @@ build.
 
 ## Pi-hole
 
-`modules/nixos/pihole.nix` runs Pi-hole on every host, in a container named `pihole` at
+`modules/containers/pihole/` runs Pi-hole on every host, in a container named `pihole` at
 `10.233.0.2`. Clients reach it on its own address (see
 [Service addresses](#service-addresses)).
 
@@ -390,7 +414,7 @@ downloaded either, for the same reason.
 
 ## Logging
 
-`modules/nixos/logging.nix` runs Grafana, Loki and Prometheus on every host, in one container
+`modules/containers/grafana/` runs Grafana, Loki and Prometheus on every host, in one container
 named `grafana` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the
 host and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
 and every service's output, and each line is labelled with the host, `unit`, `identifier`,
@@ -460,8 +484,8 @@ sudo nixos-container run grafana -- journalctl -u loki -u grafana
 ## Alerts (ntfy)
 
 Grafana raises alerts and [ntfy](https://ntfy.sh) delivers them to a phone. Both run on every
-host, each in its own container, and each host alerts about itself. `modules/nixos/ntfy.nix`
-runs ntfy in a container named `ntfy` at `10.233.0.4`, and `logging.nix` provisions Grafana's
+host, each in its own container, and each host alerts about itself. `modules/containers/ntfy/`
+runs ntfy in a container named `ntfy` at `10.233.0.4`, and `modules/containers/grafana/` provisions Grafana's
 contact point, notification policy, message template and rules, so nothing is set up in the
 interface. Grafana can still be used without ntfy: the alerts just have nowhere to go.
 
