@@ -58,15 +58,8 @@
         disko.nixosModules.disko
         home-manager.nixosModules.home-manager
         sops-nix.nixosModules.sops
-        ./modules/nixos/common.nix
+        ./modules/nixos
         ./modules/containers
-        ./modules/nixos/dns.nix
-        ./modules/nixos/firewall.nix
-        ./modules/nixos/hardening.nix
-        ./modules/nixos/home-manager.nix
-        ./modules/nixos/log-retention.nix
-        ./modules/nixos/minimal.nix
-        ./modules/nixos/secrets.nix
         ./hosts/${name}/configuration.nix
       ];
 
