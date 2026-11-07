@@ -59,7 +59,7 @@
         home-manager.nixosModules.home-manager
         sops-nix.nixosModules.sops
         ./modules/nixos/common.nix
-        ./modules/nixos/containers.nix
+        ./modules/containers/framework
         ./modules/nixos/dns.nix
         ./modules/nixos/firewall.nix
         ./modules/nixos/hardening.nix

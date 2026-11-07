@@ -4,6 +4,7 @@
 # default-deny forward chain. Takes effect on a host once it declares a container.
 { config, lib, ... }:
 let
+  host = config;
   prefix = "10.233.0";
   subnet = "${prefix}.0/24";
   hostAddress = "${prefix}.1";
@@ -55,36 +56,38 @@ in
 
   options.containers = lib.mkOption {
     type = lib.types.attrsOf (
-      lib.types.submodule {
-        config = {
+      lib.types.submodule (
+        { config, ... }:
+        {
           # Not defaults. Without these, the firewalls and guard below don't contain a container.
-          privateNetwork = true;
-          privateUsers = "pick";
-          autoStart = lib.mkDefault true;
-          inherit hostAddress;
-
           config = {
-            imports = [
-              ./container-firewall.nix
-              ./log-retention.nix
-              ./minimal.nix
-            ];
+            privateNetwork = true;
+            privateUsers = "pick";
+            autoStart = lib.mkDefault true;
+            inherit hostAddress;
 
-            services.journald.settings.Journal.SystemMaxUse = "256M";
+            config = {
+              imports = [ ../guest/base.nix ];
 
-            networking = {
-              # With the hostName NixOS sets from the attribute name, this makes <service>.<domain>.
-              inherit (config.networking) domain;
-              enableIPv6 = false;
-              nameservers = [ hostAddress ];
-              # The host's resolv.conf points at its own loopback.
-              useHostResolvConf = false;
+              container = {
+                address = config.localAddress;
+                inherit (host.networking) hostName;
+              };
+
+              networking = {
+                # With the hostName NixOS sets from the attribute name, this makes <service>.<domain>.
+                inherit (host.networking) domain;
+                enableIPv6 = false;
+                nameservers = [ hostAddress ];
+                # The host's resolv.conf points at its own loopback.
+                useHostResolvConf = false;
+              };
+
+              system.stateVersion = lib.mkDefault host.system.stateVersion;
             };
-
-            system.stateVersion = lib.mkDefault config.system.stateVersion;
           };
-        };
-      }
+        }
+      )
     );
   };
 

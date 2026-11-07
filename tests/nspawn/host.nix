@@ -2,7 +2,7 @@
 { lib, ... }:
 {
   imports = [
-    ../../modules/nixos/containers.nix
+    ../../modules/containers/framework
     ../../modules/nixos/firewall.nix
   ];
 

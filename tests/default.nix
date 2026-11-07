@@ -22,7 +22,10 @@ builtins.mapAttrs
     }
   )
   {
-    container-isolation = ./nspawn/container-isolation.nix;
+    container-isolation = {
+      imports = [ ./nspawn/container-isolation.nix ];
+      defaults = secrets;
+    };
     logging = {
       imports = [ ./nspawn/logging.nix ];
       defaults = secrets;
