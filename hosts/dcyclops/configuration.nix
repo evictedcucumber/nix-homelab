@@ -28,5 +28,5 @@
 
   containers.pihole.lan.address = "172.16.1.3";
   logging.lanAddress = "172.16.1.4";
-  ntfy.lanAddress = "172.16.1.5";
+  containers.ntfy.lan.address = "172.16.1.5";
 }

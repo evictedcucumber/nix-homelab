@@ -10,10 +10,10 @@ in
       imports = [
         ./host.nix
         ../../modules/nixos/logging.nix
-        ../../modules/nixos/ntfy.nix
+        ../../modules/containers/ntfy
         ../../modules/containers/pihole
       ];
-      ntfy = { inherit lanAddress; };
+      containers.ntfy.lan.address = lanAddress;
       virtualisation.vlans = [ 1 ];
       networking.interfaces.eth1.ipv4.addresses = [
         {

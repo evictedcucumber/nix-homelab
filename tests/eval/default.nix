@@ -142,9 +142,9 @@ let
     (mkCase "logging.lanAddress not on an interface" d [
       { logging.lanAddress = lib.mkForce "172.16.9.9"; }
     ] "logging.lanAddress")
-    (mkCase "ntfy.lanAddress not on an interface" d [
-      { ntfy.lanAddress = lib.mkForce "172.16.9.9"; }
-    ] "ntfy.lanAddress")
+    (mkCase "ntfy's LAN address not on an interface" d [
+      { containers.ntfy.lan.address = lib.mkForce "172.16.9.9"; }
+    ] "containers.ntfy.lan.address")
     (mkCase "allowFrom naming a missing container" d [
       { containers.pihole.config.containerFirewall.allowFrom.missing = [ 80 ]; }
     ] "allowFrom")

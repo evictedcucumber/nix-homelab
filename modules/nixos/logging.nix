@@ -17,7 +17,7 @@ let
   alloyUid = 399;
   inherit (config.logging) lanAddress;
   privateRanges = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }";
-  ntfy = import ./ntfy-endpoint.nix;
+  ntfy = import ../containers/ntfy/endpoint.nix;
   credentials = [
     "grafana-admin-password"
     "grafana-secret-key"
