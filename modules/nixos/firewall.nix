@@ -1,6 +1,7 @@
 # Default deny in, out and forward. Only inbound SSH, which the openssh module opens, and
-# outbound NTP, NTS key exchange and DNS over TLS are allowed. Deploys are pushed from WSL
-# over SSH. The host can also connect to its containers, whose own firewalls decide.
+# outbound NTP, NTS key exchange and DNS over TLS are allowed. Deploys are pushed from the
+# control node over SSH. The host can also connect to its containers, whose own firewalls
+# decide.
 { lib, ... }:
 let
   dnsServers = map (u: u.address) (import ./dns-upstreams.nix);

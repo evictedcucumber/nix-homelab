@@ -1,5 +1,5 @@
 # Server package set: no docs, desktop data or tools the hosts can't use. Deploys
-# run from WSL, so hosts only need Nix to receive a closure and activate it.
+# run from the control node, so hosts only need Nix to receive a closure and activate it.
 { modulesPath, ... }:
 {
   imports = [ (modulesPath + "/profiles/minimal.nix") ];

@@ -57,7 +57,7 @@ in
         (lib.trim (builtins.readFile ../../keys/nix-homelab-signing.pub))
         (lib.trim (builtins.readFile ../../keys/nix-homelab-signing-backup.pub))
       ];
-      # Hosts never build. WSL builds everything, and deploys push it here.
+      # Hosts never build. The control node builds everything, and deploys push it here.
       max-jobs = 0;
     };
     gc = {
