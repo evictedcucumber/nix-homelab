@@ -19,23 +19,31 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 
 ## Layout
 
-| Path             | Purpose                                                |
-| ---------------- | ------------------------------------------------------ |
-| `flake.nix`      | Hosts, install ISOs, dev shell, formatter and checks   |
-| `hosts/<name>/`  | Per-host configuration                                 |
-| `modules/nixos/` | Config shared between hosts, and the unattended installer |
-| `home/`          | Home Manager config for each user                      |
-| `scripts/`       | Hyper-V network and VM setup, and the test runner      |
-| `secrets/`       | Per-host sops files holding the service passwords      |
-| `users/`         | Login password hashes, one `<user>.hash` each          |
-| `tests/`         | NixOS tests, run by `just test`                        |
-| `treefmt.nix`    | Formatters and linters run by `nix fmt`                |
-| `justfile`       | Common commands                                        |
+| Path              | Purpose                                                                  |
+| ----------------- | ------------------------------------------------------------------------ |
+| `flake.nix`       | Hosts, install ISOs, dev shell, formatter and checks                     |
+| `hosts/<name>/`   | Per-host configuration                                                   |
+| `modules/nixos/`  | Config shared between hosts, and the unattended installer                |
+| `home/`           | Home Manager config for each user                                        |
+| `scripts/`        | `deploy.sh`, `secrets.sh`, `check-secrets.sh`, the test runner, and Hyper-V network and VM setup |
+| `secrets/`        | Per-host sops files holding the service passwords                        |
+| `users/`          | Login password hashes, one `<user>.hash` each, created by `just set-password` |
+| `keys/`           | Public halves of the deploy signing keys                                 |
+| `tests/`          | NixOS tests, run by `just test`                                          |
+| `treefmt.nix`     | Formatters and linters run by `nix fmt`                                  |
+| `justfile`        | Common commands                                                          |
+| `manual-setup.md` | Checklist of the setup steps only a person can do                        |
+| `stig-audit.md`   | Each STIG finding, and why it was adopted or skipped                     |
+
+On a new machine, start with [`manual-setup.md`](manual-setup.md): passwords, keys,
+backups, installs and the phone. The hosts fail to evaluate until `users/captain.hash` and
+`users/riley.hash` exist.
 
 ## Development
 
 Enter the dev shell, which provides `just`, `lefthook`, `nixos-rebuild`, the `nixd`
-language server, `sops`, `age`, `ssh-to-age`, `mkpasswd` and the formatters, and installs the Git pre-commit hook:
+language server, `sops`, `age`, `ssh-to-age`, `mkpasswd` and the formatters, and installs
+the Git pre-commit hook:
 
 ```bash
 nix develop
@@ -43,6 +51,10 @@ nix develop
 
 With [direnv](https://direnv.net), run `direnv allow` once and it loads
 automatically.
+
+The pre-commit hook checks the staged files with the same formatters and linters
+as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
+file, `git add` it and commit again.
 
 Run `just` to list the recipes:
 
@@ -58,6 +70,8 @@ Run `just` to list the recipes:
 | `just secrets-init <host>`             | Create a host's secrets file, never replacing |
 | `just secrets-rekey <host> [target]`   | Encrypt a host's secrets for its SSH host key |
 | `just ntfy-cert <host> [target]`       | Print a host's ntfy certificate, to import into the phone |
+| `just signing-key`                     | Create the deploy signing key if missing     |
+| `just vulnix <host>`                   | Scan a host's closure for known CVEs         |
 | `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
@@ -103,44 +117,9 @@ with its public half in `keys/nix-homelab-signing-backup.pub`. Its private half 
 offline only (password manager), never on the control node.
 
 `just signing-key` creates the private key if it is missing, and never overwrites it. It
-then rewrites the public file from it. Back the private key up somewhere off this machine,
-such as a password manager. Anyone holding it can have a host accept any closure.
-
-If the main key leaks or is lost, the backup key lets you deploy and replace it:
-
-1. Move the old main key aside, run `just signing-key`, and commit the new
-   `keys/nix-homelab-signing.pub`. The old public key is now gone from the config.
-2. Deploy to every host signed by the backup key, with its private half restored to a
-   temporary file: `NIX_HOMELAB_SIGNING_KEY=/path/to/backup.key just deploy <host>`. The
-   hosts still trust the backup key, and the deploy delivers the new main key. Delete the
-   temporary file afterwards.
-3. If the backup key was used on an untrusted machine, or leaked itself, generate a new one
-   with `nix key generate-secret --key-name nix-homelab-3`, store it offline, swap
-   `keys/nix-homelab-signing-backup.pub` for its public half, and deploy again.
-
-If both keys are lost, deploys fail with "lacks a signature by a trusted key", because the
-hosts trust only the old public key. A normal deploy can't deliver the new key, so:
-
-1. Move the old key aside, run `just signing-key`, and commit the new public file.
-2. Build the host and copy its closure over as a file, then import it on the host as root,
-   which needs no signature:
-
-   ```bash
-   out=$(nix build --no-link --print-out-paths .#nixosConfigurations.<host>.config.system.build.toplevel)
-   nix-store --export $(nix-store --query --requisites "$out") > closure.nar
-   scp -i ~/.ssh/nix-homelab-control-node.key closure.nar captain@<address>:
-   # on the host:
-   sudo nix-store --import < closure.nar
-   sudo nix-env -p /nix/var/nix/profiles/system --set <out>
-   sudo <out>/bin/switch-to-configuration switch
-   ```
-
-   Later deploys work, since the host now trusts the new key. The `nix-signing` test
-   covers a root import of an unsigned path; the copy and activation steps are untested.
-
-The pre-commit hook checks the staged files with the same formatters and linters
-as `just fmt`. It rejects the commit if anything fails. If a formatter rewrites a
-file, `git add` it and commit again.
+then rewrites the public file from it. Anyone holding the private key can have a host
+accept any closure. For creating and backing up the keys, and recovering when one is lost
+or leaked, see [`manual-setup.md`](manual-setup.md#deploy-signing-key).
 
 ### Vulnerability scan
 
@@ -208,16 +187,28 @@ SSH config. It keeps host keys in `~/.ssh/known_hosts.d/`, one file per address,
 never touches `~/.ssh/known_hosts`. Builds only add to WSL's Nix store, and every
 deploy activates on its target.
 
-After a WSL restart, re-run this, because Windows resets forwarding on the WSL
-adapter:
-
-```bash
-just vm-forwarding
-```
-
 `just` trusts a host's key the first time it connects, and refuses it if it later
 changes. Reinstalling a VM changes its key, so `just vm-create` and `just vm-rebuild`
 remove the old one.
+
+After a WSL restart, run `just vm-forwarding` again, because Windows resets forwarding on
+the WSL adapter.
+
+### Service addresses
+
+Pi-hole, Grafana and ntfy each have an address of their own on the host's network:
+
+| Service              | Option               | `tcyclops`   | `dcyclops`   | `cyclops` |
+| -------------------- | -------------------- | ------------ | ------------ | --------- |
+| [Pi-hole](#pi-hole)  | `pihole.lanAddress`  | `172.16.0.3` | `172.16.1.3` | none yet  |
+| [Grafana](#logging)  | `logging.lanAddress` | `172.16.0.4` | `172.16.1.4` | none yet  |
+| [ntfy](#alerts-ntfy) | `ntfy.lanAddress`    | `172.16.0.5` | `172.16.1.5` | none yet  |
+
+It is a second address on the host, not a separate interface, because containers only get
+their [`ve-<name>` interface](#containers). The host forwards the service's ports from
+private addresses to its container and drops everything else sent to the address, so SSH
+stays on the host's own address, and the service doesn't answer on that one. With no
+address, as on `cyclops` for now, nothing outside the host can reach the service.
 
 ## Users
 
@@ -340,9 +331,8 @@ build.
 ## Pi-hole
 
 `modules/nixos/pihole.nix` runs Pi-hole on every host, in a container named `pihole` at
-`10.233.0.2`. Clients reach it on its own address on the host's network, set with
-`pihole.lanAddress`: `172.16.0.3` on `tcyclops` and `172.16.1.3` on `dcyclops`. `cyclops`
-has none yet, so nothing outside it can reach Pi-hole there.
+`10.233.0.2`. Clients reach it on its own address (see
+[Service addresses](#service-addresses)).
 
 | Service | Port |
 | --- | --- |
@@ -359,11 +349,6 @@ is `pihole-web-password` in `secrets/<host>.yaml`, so every start sets it again.
 with `sops -d --extract '["pihole-web-password"]' secrets/<host>.yaml`, and see
 [Secrets and passwords](#secrets-and-passwords) to change it. Settings are read-only in
 the interface, because they come from this repo.
-
-The address is a second address on the host, not a separate interface, because containers
-only get their [`ve-<name>` interface](#containers). The host forwards these ports to the
-container and drops everything else sent to the address, so SSH stays on the host's own
-address, and Pi-hole doesn't answer on that one.
 
 It starts on boot, and restarts if FTL or the container exits for any reason, until
 stopped with `sudo systemctl stop container@pihole`. Check it from the host:
@@ -406,10 +391,8 @@ each container's (from `systemd`), and each container's CPU and memory (from cAd
 Prometheus. Alloy restarts when a container starts with a
 journal newer than Alloy, such as on its first start, so it finds the new journal.
 
-Grafana is on its own address on the host's network, set with `logging.lanAddress`:
-`172.16.0.4` on `tcyclops` and `172.16.1.4` on `dcyclops`. `cyclops` has none yet, so
-nothing outside it can reach Grafana there. As with Pi-hole, the host forwards TCP port 443
-from private addresses to the container and drops everything else sent to the address.
+Grafana is on its own address (see [Service addresses](#service-addresses)), and the host
+forwards TCP port 443 to it.
 
 The interface is at `https://172.16.0.4/`. Its certificate is self-signed, so browsers warn
 about it, and it's made again when the address changes. Sign in as `admin`. The password is
@@ -487,11 +470,9 @@ services running inside the containers. Grafana can't tell you it's down itself,
 ntfy, so a dead Grafana or ntfy is silent. `severity=critical` alerts reach the phone with high
 priority, the rest with the default.
 
-ntfy is on its own address on the host's network, set with `ntfy.lanAddress`: `172.16.0.5` on
-`tcyclops` and `172.16.1.5` on `dcyclops`. `cyclops` has none yet, so nothing outside it can reach
-ntfy there. As with Grafana, the host forwards TCP port 443 from private addresses to the container
-over TLS and drops everything else sent to the address. The certificate is self-signed, made when
-ntfy first starts, and again when the address changes or 30 days before it expires.
+ntfy is on its own address (see [Service addresses](#service-addresses)), and the host
+forwards TCP port 443 to it over TLS. The certificate is self-signed, made when ntfy first
+starts, and again when the address changes or 30 days before it expires.
 
 Access is denied unless granted. Two users exist, with passwords from `secrets/<host>.yaml`: `grafana`
 (`ntfy-grafana-password`) can only publish to the `alerts` topic, and `phone`
@@ -500,28 +481,13 @@ hashes the passwords from the container's credentials and gets its users that wa
 password nor a hash is in the Nix store, and it refuses to start if one is empty. A changed password
 applies once you deploy.
 
-**Phone setup (Android):**
-
-1. Install the ntfy app.
-2. Get the certificate and send it to the phone: `just ntfy-cert dcyclops > ntfy.pem`. It's public,
-   but only root can read it on the host, so it asks for `captain`'s sudo password.
-3. In the app, open Settings, Advanced, Manage certificates and import `ntfy.pem` (needs app 1.22.2
-   or newer). Compare the SHA-256 fingerprint it shows with the one printed on the host's console by
-   `sudo openssl x509 -noout -fingerprint -sha256 -in /var/lib/nixos-containers/ntfy/var/lib/private/ntfy-sh/tls.crt`.
-   The certificate is made again when the address changes or it nears expiry, so import it again then.
-4. Print the password: `sops -d --extract '["ntfy-phone-password"]' secrets/dcyclops.yaml`.
-5. Subscribe to topic `alerts` on the server `https://172.16.1.5`, with user `phone` and that password.
-   Use the host's own address, such as `172.16.0.5` for `tcyclops`. Subscribe once per host.
-
-ntfy has no way out, so it can't use `ntfy.sh` to wake an iOS device, and the iOS app only gets
-alerts when it polls, which is delayed. Android holds a connection to the server open instead, so it
-needs the phone to reach the address.
-
-The VMs' addresses are behind the Hyper-V NAT switch (see [Networking](#networking)), so a phone on the
-home Wi-Fi can't reach them as they are. Add a route on the Windows PC and tell the router, or map the
-port on Windows with `netsh interface portproxy` to the address and give the phone the PC's address
-instead, which also changes what the certificate must say. A physical `cyclops` on the LAN needs
-neither.
+**Phone setup.** The steps for Android are in
+[`manual-setup.md`](manual-setup.md#4-per-phone). ntfy has no way out, so it can't use
+`ntfy.sh` to wake an iOS device, and the iOS app only gets alerts when it polls, which is
+delayed. Android holds a connection to the server open instead, so it needs the phone to
+reach the address. The VMs' addresses are behind the Hyper-V NAT switch (see
+[Networking](#networking)), so a phone on the home Wi-Fi needs a route or port mapping to
+reach them. A physical `cyclops` on the LAN needs neither.
 
 Check it from the host:
 
@@ -530,67 +496,31 @@ sudo nixos-container run ntfy -- journalctl -u ntfy-sh
 sudo nixos-container run grafana -- journalctl -u grafana | grep -i alert
 ```
 
-## Setting up the VMs
+## Setting up hosts
 
-Do this once per VM. The ISO installs the SSH key from
-`modules/nixos/common.nix`, which is the only way in over SSH. It also sets the user
-passwords from `users/<name>.hash`, for logging in at the VM's console, so
-[set those](#secrets-and-passwords) first.
+The steps for each host are in [`manual-setup.md`](manual-setup.md#3-per-host): installing a
+VM, installing `cyclops`, rekeying its secrets and deploying.
 
-1. Build the ISO, then create and start the VM. Run this from WSL and approve the
-   UAC prompt, because the scripts in `scripts/hyper-v/` need administrator rights:
+The ISO installs the SSH key from `modules/nixos/common.nix`, which is the only way in over
+SSH, and sets the user passwords from `users/<name>.hash` for the VM's console. Each VM is
+Generation 2, with nested virtualization and every integration service on, and the guest
+runs the Hyper-V daemons. The script stops if any of that isn't in place.
 
-   ```bash
-   just vm-create tcyclops
-   ```
+The ISO goes in your Windows Downloads folder, or in `iso_dir` if set. The VM's disks,
+configuration and checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script
+stops if an existing VM has any of them elsewhere. The folder is the VM's name without the
+brackets, such as `nix tcyclops.homelab.zezura.cc`, because PowerShell reads brackets as
+wildcards.
 
-   Each VM is Generation 2, with nested virtualization and every integration
-   service on, and the guest runs the Hyper-V daemons. The script stops if any of
-   that isn't in place.
+The ISO **wipes the disk with no prompt**, then reboots into the installed system. It only
+checks that it's running under Hyper-V, not which VM it's in, so it would also wipe a
+Debian VM. Only attach it to its own VM.
 
-   The ISO goes in your Windows Downloads folder. The VM's disks, configuration and
-   checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script stops if
-   an existing VM has any of them elsewhere. The folder is the VM's name without the
-   brackets, such as `nix tcyclops.homelab.zezura.cc`, because PowerShell reads
-   brackets as wildcards.
-   To put the ISO elsewhere on a Windows drive, run
-   `just iso_dir=/mnt/e/isos vm-create tcyclops`. Pass
-   `-Force` or `-Reinstall` after the VM name to use those script options.
-
-   The ISO **wipes the disk with no prompt**, then reboots into the installed
-   system. It only checks that it's running under Hyper-V, not which VM it's in,
-   so it would also wipe a Debian VM. Only attach it to its own VM.
-
-2. Enable forwarding on the new switches:
-
-   ```bash
-   just vm-forwarding
-   ```
-
-3. **Encrypt the VM's secrets for its new host key, then deploy.** The new install has
-   a new SSH host key, so it can't decrypt `secrets/<host>.yaml` yet, and its Pi-hole and
-   Grafana containers keep restarting until you do. `just deploy` refuses until this is done:
-
-   ```bash
-   just secrets-rekey tcyclops
-   just deploy tcyclops
-   ```
-
-   Commit the changed `.sops.yaml` and `secrets/tcyclops.yaml`. Do the same after every
-   reinstall, including `just vm-rebuild`.
-
-Deploy later changes with `just deploy <vm>`. The ISO contains the system as it
-was when built, and a deploy updates it from there.
-
-A deploy can't change a VM's disk layout. A VM installed before a layout change in
-`modules/nixos/hyperv-lvm.nix` must be reinstalled from a new ISO before its next deploy,
-or it won't find its disks on reboot. Reinstalling wipes the disk.
-
-To throw away `dcyclops` and start again, which is refused for `tcyclops`:
-
-```bash
-just vm-rebuild dcyclops
-```
+The ISO contains the system as it was when built, and a deploy updates it from there. A
+deploy can't change a VM's disk layout. A VM installed before a layout change in
+`modules/nixos/hyperv-lvm.nix` must be reinstalled from a new ISO before its next deploy, or
+it won't find its disks on reboot. Reinstalling wipes the disk. `just vm-rebuild dcyclops`
+throws `dcyclops` away and reinstalls it, and is refused for `tcyclops`.
 
 ## Secrets and passwords
 
@@ -604,74 +534,38 @@ Nothing secret is in the Nix store as plaintext, and no password is set by hand.
 **Keys.** Each host decrypts with an age key derived from its SSH host key
 (`/etc/ssh/ssh_host_ed25519_key`), which never leaves it. You edit with the admin age key
 in `~/.config/sops/age/keys.txt`, whose public half is the first recipient in
-`.sops.yaml`. **Back that file up somewhere safe, such as a password manager.** Without
-it, nobody can edit the secrets, and the only fix is `just secrets-init` on new files
-and new passwords everywhere. A fixed host key committed to the repo would let anyone read
-the secrets, so the host keys are made on each install instead.
+`.sops.yaml`. Without it, nobody can edit the secrets, so back it up. A fixed host key
+committed to the repo would let anyone read the secrets, so the host keys are made on each
+install instead.
 
-**Login passwords.** The hosts fail to evaluate until both hashes exist:
-
-```bash
-just set-password captain
-just set-password riley
-```
-
-It asks twice, needs 15 characters with all four character classes, and writes the
-hash to `users/<name>.hash`. Commit the files. Run it again to change a password, then
-deploy. The hashes are public, because this repo is, so anyone can try to guess the
-password offline. Use a long random password, such as one from a password manager. The
-hashes stay out of sops so that a fresh install can log in before it has its host key
-rekeyed.
+**Login passwords.** `just set-password <user>` asks twice, needs 15 characters with all
+four character classes, and writes the hash to `users/<name>.hash`. Run it again to change
+a password, then deploy. The hashes are public, because this repo is, so anyone can try to
+guess the password offline, and a long random password is the defence. They stay out of
+sops so that a fresh install can log in before it has its host key rekeyed.
 
 **Service passwords.** `just secrets-init <host>` creates `secrets/<host>.yaml` with random
-values, encrypted for the admin key only, and never replaces a file. Edit or read it
-with:
-
-```bash
-sops secrets/dcyclops.yaml
-sops -d --extract '["grafana-admin-password"]' secrets/dcyclops.yaml
-```
-
-Deploy after an edit. The affected containers restart on their own, and the new values
+values, encrypted for the admin key only, and never replaces a file. Edit or read it with
+`sops`. After a deploy the affected containers restart on their own, and the new values
 replace the old ones, because every start sets them again. No decrypted file belongs in
 the repo, and `.gitignore` blocks the usual names (`*.dec`, `*.decrypted`, `keys.txt`).
 
-**After a reinstall.** A new install has a new host key, which can't decrypt anything yet:
-
-```bash
-just secrets-rekey dcyclops
-```
-
-This fetches the host's public key over SSH, shows its fingerprint and asks you to confirm
-it matches `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the host's console, because
-a first connection can't prove whose key it is. It then replaces the recipient marked
-`# host` in `.sops.yaml`, keeping every other recipient such as a second admin key, and
-re-encrypts `secrets/dcyclops.yaml`. `just vm-create` prints this step. `just deploy`
-checks the host's key is a recipient first and refuses, naming this recipe, if it isn't.
-Both need the dev shell, for `ssh-to-age`.
-A host that has never been rekeyed can't decrypt, so on a fresh install the Pi-hole and
-Grafana containers fail and restart until you do.
+**After a reinstall.** A new install has a new host key, which can't decrypt anything yet,
+so its Pi-hole, Grafana and ntfy containers fail and restart until you rekey.
+`just secrets-rekey <host>` fetches the host's public key over SSH, shows its fingerprint
+and asks you to confirm it matches `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on
+the host's console, because a first connection can't prove whose key it is. It then
+replaces the recipient marked `# host` in `.sops.yaml`, keeping every other recipient such
+as a second admin key, and re-encrypts `secrets/<host>.yaml`. `just vm-create` prints this
+step, and `just deploy` checks the host's key is a recipient first and refuses, naming this
+recipe, if it isn't. Both need the dev shell, for `ssh-to-age`.
 
 Rekeying doesn't change the values, and the old ciphertext stays in git history. After
 reinstalling a compromised host, or if a key leaked, also change the values with
 `sops secrets/<host>.yaml`, then deploy.
 
-**Moving an existing host here.** In this order:
-
-1. Run `just set-password` for `captain` and `riley`, and commit. Evaluation fails without them.
-2. Optionally, keep Grafana's database readable: put the old key from
-   `/var/lib/nixos-containers/grafana/var/lib/grafana/secret-key` in `grafana-secret-key`
-   with `sops secrets/<host>.yaml`. A different key makes anything Grafana encrypted in its
-   database unreadable, which is only stored data-source and alert secrets. The ntfy
-   password is one, and is stored again at each start, so nothing is lost.
-3. `just secrets-rekey <host>`, then commit.
-4. `just deploy <host>`. The sudo prompt wants `captain`'s old password, because nothing is
-   activated yet. Pi-hole and Grafana restart, so DNS and the dashboards drop briefly.
-5. Afterwards, the Pi-hole and Grafana passwords are the sops ones, and `captain`'s sudo
-   password is the one from `users/captain.hash`.
-6. Delete what the old design left in the containers' state, which is now unused:
-   `pihole/var/lib/pihole/web-password.env` and `grafana/var/lib/grafana/{admin-password,secret-key}`
-   under `/var/lib/nixos-containers/`.
+The steps for all of this, and for moving an existing host here, are in
+[`manual-setup.md`](manual-setup.md).
 
 ## Testing changes
 
@@ -709,13 +603,8 @@ The tests decrypt `tests/secrets/secrets.yaml` with the throwaway key beside it,
 throwaway login hashes. Their values are public on purpose and protect nothing, so never
 reuse them. The real `users/*.hash` files don't matter to the tests.
 
-The nspawn tests need these settings on the machine that builds, in its `nix.conf`:
-
-```ini
-experimental-features = nix-command flakes auto-allocate-uids
-auto-allocate-uids = true
-system-features = nixos-test benchmark big-parallel kvm uid-range
-```
+The nspawn tests need settings in the `nix.conf` of the machine that builds, listed in
+[`manual-setup.md`](manual-setup.md#nixconf-for-the-tests).
 
 ## Testing from a desktop
 
@@ -745,46 +634,3 @@ To turn it off and delete it, with its folder under `E:\Hyper-V VMs` and its ISO
 ```bash
 just vm-dev destroy
 ```
-
-## Setting up the server
-
-1. Install NixOS on `cyclops` with a UEFI boot setup.
-
-2. Let WSL deploy to it. Add this to `/etc/nixos/configuration.nix` on the server,
-   then run `sudo nixos-rebuild switch` there:
-
-   ```nix
-   services.openssh = {
-     enable = true;
-     settings = {
-       PasswordAuthentication = false;
-       KbdInteractiveAuthentication = false;
-       PermitRootLogin = "no";
-     };
-   };
-   nix.settings.trusted-users = [ "captain" ];
-   users.users.captain = {
-     isNormalUser = true;
-     extraGroups = [ "wheel" ];
-     hashedPassword = "<the contents of users/captain.hash>";
-     openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node" ];
-   };
-   ```
-
-3. From WSL, replace the placeholder hardware config. `just deploy` refuses to run
-   until you do:
-
-   ```bash
-   just hardware-config cyclops <address>
-   ```
-
-4. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release
-   you installed, and `git add` the changes.
-
-5. Create the secrets file if it's missing, encrypt it for the server's SSH host key, and
-   deploy. This creates `riley`, locks `root`, and sets both logins from `users/`:
-
-   ```bash
-   just secrets-rekey cyclops <address>
-   just deploy cyclops <address>
-   ```
