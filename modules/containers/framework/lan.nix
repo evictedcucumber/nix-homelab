@@ -47,14 +47,8 @@ let
       chain input {
         type filter hook input priority filter - 1; policy accept;
 
-        ${
-          if c.lan.fromHost then
-            ''
-              # ${name}'s replies to the host come back on ve-${name}.
-              iifname != "lo" ct state != { established, related } ip daddr ${c.lan.address} drop''
-          else
-            ''iifname != "lo" ip daddr ${c.lan.address} drop''
-        }
+        ${lib.optionalString c.lan.fromHost "# Its replies to the host come back on ve-${name}."}
+        iifname != "lo" ${lib.optionalString c.lan.fromHost "ct state != { established, related } "}ip daddr ${c.lan.address} drop
       }
     '';
   };
