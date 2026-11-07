@@ -1,13 +1,22 @@
 # nix-homelab
 
-NixOS homelab managed with a Nix flake, and deployed over SSH from WSL.
+NixOS homelab managed with a Nix flake, and deployed over SSH from the control node.
 
-| Host       | Machine                  | Role                                       |
-| ---------- | ------------------------ | ------------------------------------------ |
-| `cyclops`  | Physical server          | Production                                 |
-| `tcyclops` | Hyper-V VM on the WSL PC | Long-lived test VM                         |
-| `dcyclops` | Hyper-V VM on the WSL PC | Throwaway dev VM, rebuilt whenever needed  |
-| `vm-dev`   | Hyper-V VM on the WSL PC | Temporary desktop for testing `dcyclops`   |
+## Machines
+
+| Machine         | What it is                      | Where it runs                  | Role                                          |
+| --------------- | ------------------------------- | ------------------------------ | --------------------------------------------- |
+| Control node    | NixOS-WSL, or a NixOS machine   | Windows PC, or a separate PC   | Runs `just`, builds, signs and deploys, and holds the keys |
+| Windows PC      | Windows with Hyper-V            | On its own                     | Hosts the three VMs below                     |
+| `tcyclops`      | Hyper-V VM                      | Windows PC                     | Long-lived test VM                            |
+| `dcyclops`      | Hyper-V VM                      | Windows PC                     | Throwaway dev VM, rebuilt whenever needed     |
+| `vm-dev`        | Hyper-V VM                      | Windows PC                     | Temporary desktop for testing `dcyclops`      |
+| `cyclops`       | Physical server                 | Homelab LAN                    | Production                                    |
+
+The control node's own configuration isn't in this repo. The Hyper-V recipes and reaching the VMs need NixOS-WSL
+on that PC, because the VMs sit on internal Hyper-V switches behind its NAT. A standalone
+NixOS control node can only manage `cyclops`. Each manual step says where it runs, in
+[`manual-setup.md`](manual-setup.md).
 
 These VMs mirror the Debian `tcyclops` and `dcyclops` from the `homelab` repo and
 run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names differ:
@@ -75,13 +84,17 @@ Run `just` to list the recipes:
 | `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
 | `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
 | `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
-| `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO          |
-| `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it   |
-| `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO           |
-| `just vm-dev <create\|destroy>`         | Create or remove the throwaway desktop VM    |
-| `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks |
+| `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO † |
+| `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it † |
+| `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO † |
+| `just vm-dev <create\|destroy>`         | Create or remove the throwaway desktop VM † |
+| `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks † |
 | `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
+
+† Needs a NixOS-WSL control node on the Hyper-V PC (`just iso` only when `dir` is left
+out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else, and
+managing `cyclops`, works from either kind of control node.
 
 `target` defaults to the VM's address, and `cyclops` must be given one. It's an address,
 which logs in as `captain`, or `<user>@<address>`. Flakes only see files tracked by git,
@@ -101,7 +114,7 @@ just deploy tcyclops
 just deploy cyclops <address>
 ```
 
-A deploy checks SSH first, then builds in WSL, signs the closure with the deploy key, and
+A deploy checks SSH first, then builds on the control node, signs the closure with the deploy key, and
 copies it as `captain`. It prints what changed from the running system, then activates with
 `nixos-rebuild --store-path`, which asks for `captain`'s sudo password once and uses it for
 both the profile update and the activation. The hosts set `max-jobs = 0`, so any build
@@ -181,17 +194,17 @@ networking misbehaves with both in place, check `Get-NetNat` first. `just vm-cre
 also stops if another adapter has an address in `172.16.0.0/16`, because Windows picks
 the WSL and Default Switch subnets from the same private range.
 
-Nothing here changes WSL itself. Its default route already goes through Windows,
+Nothing here changes NixOS-WSL itself. Its default route already goes through Windows,
 so it needs no routes of its own. `just` uses addresses directly, so it needs no
 SSH config. It keeps host keys in `~/.ssh/known_hosts.d/`, one file per address, and
-never touches `~/.ssh/known_hosts`. Builds only add to WSL's Nix store, and every
-deploy activates on its target.
+never touches `~/.ssh/known_hosts`. Builds only add to the control node's Nix store, and
+every deploy activates on its target.
 
 `just` trusts a host's key the first time it connects, and refuses it if it later
 changes. Reinstalling a VM changes its key, so `just vm-create` and `just vm-rebuild`
 remove the old one.
 
-After a WSL restart, run `just vm-forwarding` again, because Windows resets forwarding on
+After a NixOS-WSL restart, run `just vm-forwarding` again, because Windows resets forwarding on
 the WSL adapter.
 
 ### Service addresses
@@ -257,7 +270,7 @@ Nix daemon. An activation step that writes to the store, such as a custom
 
 `modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
-outbound connection, so everything reaches them by `just deploy` from WSL. IPv6 is off,
+outbound connection, so everything reaches them by `just deploy` from the control node. IPv6 is off,
 and hosts don't answer ping. A host can also connect to its own [containers](#containers),
 and forwards inbound DNS and web traffic for one extra address to [Pi-hole](#pi-hole), and
 web traffic for others to [Grafana](#logging) and [ntfy](#alerts-ntfy).
@@ -603,8 +616,8 @@ The tests decrypt `tests/secrets/secrets.yaml` with the throwaway key beside it,
 throwaway login hashes. Their values are public on purpose and protect nothing, so never
 reuse them. The real `users/*.hash` files don't matter to the tests.
 
-The nspawn tests need settings in the `nix.conf` of the machine that builds, listed in
-[`manual-setup.md`](manual-setup.md#nixconf-for-the-tests).
+The nspawn tests need Nix settings on the machine that builds, which is the control node, listed in
+[`manual-setup.md`](manual-setup.md#nix-settings-for-the-tests), set in the control node's NixOS configuration.
 
 ## Testing from a desktop
 
