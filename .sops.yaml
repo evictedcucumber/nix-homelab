@@ -2,10 +2,6 @@
 # file, then `just secrets-rekey <host>` adds the host's own key, derived from its SSH host
 # key. A host with only the admin key can't decrypt yet.
 creation_rules:
-  - path_regex: ^secrets/cyclops\.yaml$
-    key_groups:
-      - age:
-          - age1h2xv8av7hpl4y0kyuq2yup24unl29ch8dvzpa4mamwe4vpe22pjsa8e6u3
   - path_regex: ^secrets/dcyclops\.yaml$
     key_groups:
       - age:

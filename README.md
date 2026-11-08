@@ -11,11 +11,12 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from the control n
 | `tcyclops`      | Hyper-V VM                      | Windows PC                     | Long-lived test VM                            |
 | `dcyclops`      | Hyper-V VM                      | Windows PC                     | Throwaway dev VM, rebuilt whenever needed     |
 | `vm-dev`        | Hyper-V VM                      | Windows PC                     | Temporary desktop for testing `dcyclops`      |
-| `cyclops`       | Physical server                 | Homelab LAN                    | Production                                    |
+
+A physical production host, `cyclops`, is planned and will be added later.
 
 The control node's own configuration isn't in this repo. The Hyper-V recipes and reaching the VMs need NixOS-WSL
 on that PC, because the VMs sit on internal Hyper-V switches behind its NAT. A standalone
-NixOS control node can only manage `cyclops`. Each manual step says where it runs, in
+NixOS control node can't manage any host yet. Each manual step says where it runs, in
 [`manual-setup.md`](manual-setup.md).
 
 These VMs mirror the Debian `tcyclops` and `dcyclops` from the `homelab` repo and
@@ -95,25 +96,21 @@ Run `just` to list the recipes:
 | `just clean`                           | Remove `result` links                        |
 
 † Needs a NixOS-WSL control node on the Hyper-V PC (`just iso` only when `dir` is left
-out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else, and
-managing `cyclops`, works from either kind of control node.
+out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else works
+from either kind of control node.
 
 Recipes that connect to a host log in as `captain` at the address `scripts/deploy.sh` knows
-for it. `cyclops` has none yet, so add it there first. Flakes only see files tracked by git,
+for it, so add a new host there first. Flakes only see files tracked by git,
 so `git add` new files before building.
 
 SSH connections from `just` offer only the private key
 `~/.ssh/nix-homelab-control-node.key`, which matches the public key in
 `modules/nixos/common.nix`.
 
-Deploy changes to a VM first, then to the server:
+Deploy changes to a VM first:
 
 ```bash
 just deploy tcyclops
-```
-
-```bash
-just deploy cyclops
 ```
 
 A deploy checks SSH first, then builds on the control node, signs the closure with the deploy key, and
@@ -181,7 +178,6 @@ Stable is only evaluated when something uses it. It stays on 26.05 because
 | ---------------- | --------------------- | --------------------------------------- |
 | `172.16.0.0/24`  | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
 | `172.16.1.0/24`  | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
-| TBD              | cyclops (production)  | Physical homelab LAN behind the host    |
 
 Both VMs sit behind `NixHomelabNAT` on `172.16.0.0/16`, which
 `just vm-create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
@@ -213,23 +209,23 @@ the WSL adapter.
 
 Pi-hole, Grafana and ntfy each have an address of their own on the host's network:
 
-| Service              | Host number | `tcyclops`   | `dcyclops`   | `cyclops` |
-| -------------------- | ----------- | ------------ | ------------ | --------- |
-| [Pi-hole](#pi-hole)  | 3           | `172.16.0.3` | `172.16.1.3` | none yet  |
-| [Grafana](#logging)  | 4           | `172.16.0.4` | `172.16.1.4` | none yet  |
-| [ntfy](#alerts-ntfy) | 5           | `172.16.0.5` | `172.16.1.5` | none yet  |
+| Service              | Host number | `tcyclops`   | `dcyclops`   |
+| -------------------- | ----------- | ------------ | ------------ |
+| [Pi-hole](#pi-hole)  | 3           | `172.16.0.3` | `172.16.1.3` |
+| [Grafana](#logging)  | 4           | `172.16.0.4` | `172.16.1.4` |
+| [ntfy](#alerts-ntfy) | 5           | `172.16.0.5` | `172.16.1.5` |
 
 A host sets only its network, as `lan.prefix = "172.16.0";`, and gets its own address (`.2`),
 the gateway (`.1`) and each container's address from it. A container's module sets the last
-octet once, as `containers.<name>.lan.hostNumber`. Without a `lan.prefix`, as on `cyclops`
-for now, the container has no address. `containers.<name>.lan.address` still overrides the
-derived address, but the host then has to put it on an interface itself.
+octet once, as `containers.<name>.lan.hostNumber`. Without a `lan.prefix`, the container has
+no address. `containers.<name>.lan.address` still overrides the derived address, but the host
+then has to put it on an interface itself.
 
 It is a second address on the host, not a separate interface, because containers only get
 their [`ve-<name>` interface](#containers). The host forwards the service's ports from
 private addresses to its container and drops everything else sent to the address, so SSH
 stays on the host's own address, and the service doesn't answer on that one. With no
-address, as on `cyclops` for now, nothing outside the host can reach the service.
+address, nothing outside the host can reach the service.
 
 ## Users
 
@@ -531,7 +527,7 @@ applies once you deploy.
 delayed. Android holds a connection to the server open instead, so it needs the phone to
 reach the address. The VMs' addresses are behind the Hyper-V NAT switch (see
 [Networking](#networking)), so a phone on the home Wi-Fi needs a route or port mapping to
-reach them. A physical `cyclops` on the LAN needs neither.
+reach them.
 
 Check it from the host:
 
@@ -543,12 +539,18 @@ sudo nixos-container run grafana -- journalctl -u grafana | grep -i alert
 ## Setting up hosts
 
 The steps for each host are in [`manual-setup.md`](manual-setup.md#3-per-host): installing a
-VM, installing `cyclops`, rekeying its secrets and deploying.
+VM, rekeying its secrets and deploying.
 
 The ISO installs the SSH key from `modules/nixos/common.nix`, which is the only way in over
 SSH, and sets the user passwords from `users/<name>.hash` for the VM's console. Each VM is
 Generation 2, with nested virtualization and every integration service on, and the guest
 runs the Hyper-V daemons. The script stops if any of that isn't in place.
+
+`tcyclops` and `dcyclops` each get a 256 GB system disk for the OS, configuration and
+service data, and a 1 TB data disk mounted at `/srv/media` for images, videos, ISOs and other
+large files. Members of the `media` group (`captain` and `riley`) can write there. Both disks
+are dynamic VHDX files, so they only take the space the guest has written. The script adds
+a missing data disk to an existing VM but never resizes its system disk.
 
 The ISO goes in your Windows Downloads folder, or in `iso_dir` if set. The VM's disks,
 configuration and checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script
@@ -556,7 +558,7 @@ stops if an existing VM has any of them elsewhere. The folder is the VM's name w
 brackets, such as `nix tcyclops.homelab.zezura.cc`, because PowerShell reads brackets as
 wildcards.
 
-The ISO **wipes the disk with no prompt**, then reboots into the installed system. It only
+The ISO **wipes the VM's disks with no prompt**, then reboots into the installed system. It only
 checks that it's running under Hyper-V, not which VM it's in, so it would also wipe a
 Debian VM. Only attach it to its own VM.
 
@@ -619,7 +621,7 @@ Set `TEST_BASE` to compare with another branch.
 | Step                                       | Without KVM         | Runs when                  |
 | ------------------------------------------ | ------------------- | -------------------------- |
 | `checks.x86_64-linux.eval`                 | Seconds             | A Nix file changed         |
-| Build `cyclops`, `dcyclops`, `tcyclops`    | Only what changed   | A Nix file changed         |
+| Build `dcyclops`, `tcyclops`               | Only what changed   | A Nix file changed         |
 | `container-isolation`, `logging`, `pihole` | Under a minute each | A Nix file changed         |
 | `nix-signing`, in QEMU                     | About a minute      | A Nix file changed         |
 | `boot`, in QEMU                            | About a minute      | Its inputs changed, below  |

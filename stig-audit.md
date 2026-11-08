@@ -2,7 +2,7 @@
 
 Every finding in the Anduril NixOS STIG (V1R3, 30 Sep 2026) compared with this flake. The adopted findings are in `modules/nixos/hardening.nix`, which is built and evaluated but **not yet deployed to any host**.
 
-`modules/nixos/common.nix` applies to all three hosts, and none of them adds hardening of its own, so each result covers `cyclops`, `tcyclops` and `dcyclops` unless the note says otherwise.
+`modules/nixos/common.nix` applies to both hosts, and neither adds hardening of its own, so each result covers `tcyclops` and `dcyclops` unless the note says otherwise.
 
 ## Summary
 
@@ -36,7 +36,6 @@ The recommendations are my judgement, not part of the STIG. Passing this audit w
 
 - **Source:** the findings come from the XCCDF-derived JSON in the third-party `nealfennimore/nixos-stig-anduril` repo. It wasn't compared with DISA's own file, because public.cyber.mil wasn't reached.
 - **Defaults:** defaults were read from nixpkgs source at the locked revision `0bb2eed`, not evaluated. The values the notes mark as confirmed were also checked with `nix eval`.
-- **cyclops:** its `hardware-configuration.nix` is still a placeholder, and its network config isn't in the repo.
 - **Option names:** several STIG fixes use old or invalid option paths. Check each against current nixpkgs before use. The notes give the current name where I checked it.
 - **Untested behaviour:** none of `hardening.nix` has run on a host, including the audit rules, PAM stacks, firewall rule, USBGuard, AppArmor and AIDE. Notes on the effects of `fips=1` and on audit rule paths are reasoning, not test results.
 
@@ -49,7 +48,7 @@ Sorted by severity (CAT), then ID.
 | V-268089 | I | Implement DoW-approved encryption to protect the confidentiality of remote access sessions. | Gap | Skip | The default list also has chacha20-poly1305 and AES-GCM. The STIG allows CTR modes only, which would remove the stronger ciphers. Drop the CTR modes instead if you want to tighten this. |
 | V-268130 | I | Store only encrypted representations of passwords. | Default | Keep | The default is `YESCRYPT`, stronger than the SHA-512 baseline, though a literal check for `SHA512` would flag it. Don't downgrade. |
 | V-268131 | I | Not have the telnet package installed. | Default | Check | The repo adds no telnet package, and I found none in the base modules I read. Confirm with `whereis telnet` on a host. |
-| V-268144 | I | Protect the confidentiality and integrity of all information at rest. | Gap | Skip | Your decision on 2026-11-04: no disk encryption for now. Adding LUKS to cyclops after install means a reinstall. |
+| V-268144 | I | Protect the confidentiality and integrity of all information at rest. | Gap | Skip | Your decision on 2026-11-04: no disk encryption for now. Adding LUKS to a host after install means a reinstall. |
 | V-268146 | I | Protect wireless access to and from the system using encryption. | Default | Keep | `false`, confirmed with `nix eval`. |
 | V-268154 | I | Prevent the installation of patches, service packs, device drivers, or operating system comp… | Default | Consider | `require-sigs` is on and only root is trusted, so `captain` can add only closures signed by the deploy key. Deploys sign them on the control node. Covered by the `nix-signing` test. |
 | V-268157 | I | Implement cryptographic mechanisms to protect the integrity of nonlocal maintenance and diag… | Gap | Skip | The defaults are the ETM variants of these MACs plus `umac-128-etm`. The STIG's non-ETM list is weaker, and AEAD ciphers don't use a separate MAC anyway. |
@@ -65,7 +64,7 @@ Sorted by severity (CAT), then ID.
 | V-268083 | II | Be configured to display the Standard Mandatory DoW Notice and Consent Banner before grantin… | Partial | Test | Same plain text as V-268082, set with `services.openssh.settings.Banner`. |
 | V-268084 | II | Be configured to display the Standard Mandatory DoW Notice and Consent Banner before grantin… | N/A | Keep | No graphical login. |
 | V-268086 | II | Initiate a session lock after a 10-minute period of inactivity for graphical user logon. | N/A | Keep | The fix is for GNOME, GDM and xautolock, and these hosts have no GUI. |
-| V-268087 | II | Provide the capability for users to directly initiate a session lock for all connection types. | Implemented | Test | `pkgs.vlock` is installed. It only helps at a physical console, so mainly on cyclops. |
+| V-268087 | II | Provide the capability for users to directly initiate a session lock for all connection types. | Implemented | Test | `pkgs.vlock` is installed. It only helps at a physical console, so not on the VMs. |
 | V-268088 | II | Monitor remote access methods. | Implemented | Test | Set `services.openssh.settings.LogLevel = "VERBOSE"`. It logs the key fingerprint used for each login. |
 | V-268090 | II | The NixOS audit package must be installed. | Implemented | Test | Added by the nixpkgs audit module. |
 | V-268091 | II | Generate audit records for all usage of privileged commands. | Implemented | Test | Audit rule for commands run with elevated privileges. |
@@ -114,7 +113,7 @@ Sorted by severity (CAT), then ID.
 | V-268136 | II | Use multifactor authentication for network access to privileged accounts. | Gap | Skip | `opencryptoki` is smart-card tooling. If you want real MFA, a FIDO2 `sk-ed25519` SSH key is the better fit. |
 | V-268137 | II | Not allow direct login to the root account via SSH. | Met | Keep | `PermitRootLogin = "no"`: `common.nix:57`. |
 | V-268138 | II | Not allow direct login to the root account. | Met | Keep | `users.mutableUsers = false` and root's `hashedPassword = "!"` in `common.nix` lock root on every activation. Confirm with `passwd -S root`. |
-| V-268139 | II | Enable USBguard. | Implemented | Test | `services.usbguard` with `presentDevicePolicy = "allow"`. A USB device plugged in after the daemon starts is blocked until allowed, including a keyboard on cyclops. Anything present when the daemon restarts, such as during a deploy, is allowed. Generate a policy with `usbguard generate-policy` before relying on this on cyclops. |
+| V-268139 | II | Enable USBguard. | Implemented | Test | `services.usbguard` with `presentDevicePolicy = "allow"`. A USB device plugged in after the daemon starts is blocked until allowed, including a keyboard on a physical host. Anything present when the daemon restarts, such as during a deploy, is allowed. Generate a policy with `usbguard generate-policy` before relying on this on a physical host. |
 | V-268140 | II | A sticky bit must be set on all NixOS public directories to prevent unauthorized and uninten… | Host check | Check | Run the STIG's `find` check for world-writable directories without the sticky bit. |
 | V-268141 | II | Manage excess capacity, bandwidth, or other redundancy to limit the effects of information f… | Implemented | Test | The locked nixpkgs doesn't set this, so it's down to the kernel default. Set it explicitly, since it's one line. |
 | V-268142 | II | Terminate all SSH connections after 10 minutes of becoming unresponsive. | Implemented | Test | Set `ClientAliveInterval = 600` under `services.openssh.settings`. |

@@ -109,7 +109,7 @@
         );
     in
     {
-      nixosConfigurations = nixpkgs.lib.genAttrs ([ "cyclops" ] ++ vmHosts) mkHost // {
+      nixosConfigurations = nixpkgs.lib.genAttrs vmHosts mkHost // {
         vm-dev = vmDev;
       };
 

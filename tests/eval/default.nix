@@ -81,7 +81,6 @@ let
     };
 
   cases = [
-    (mkCase "cyclops passes" hosts.cyclops [ ] null)
     (mkCase "dcyclops passes" hosts.dcyclops [ ] null)
     (mkCase "tcyclops passes" hosts.tcyclops [ ] null)
 
@@ -130,14 +129,11 @@ let
       }
     ] "just set-password captain', run 'just set-password riley")
 
-    (secretsCase "cyclops" hosts.cyclops)
     (secretsCase "dcyclops" hosts.dcyclops)
     (secretsCase "tcyclops" hosts.tcyclops)
-    (realSecretsCase "cyclops" hosts.cyclops)
     (realSecretsCase "dcyclops" hosts.dcyclops)
     (realSecretsCase "tcyclops" hosts.tcyclops)
 
-    (limitCase "cyclops" hosts.cyclops)
     (limitCase "dcyclops" hosts.dcyclops)
     (limitCase "tcyclops" hosts.tcyclops)
 

@@ -11,11 +11,11 @@ otherwise. Each step starts with **On:**, naming where it runs:
 | **Control node** | Where you run `just`, build, sign and deploy, and where the keys live. Either NixOS-WSL on the Windows PC, or a separate NixOS machine |
 | **Windows**      | The Windows PC with Hyper-V: a UAC prompt, or Hyper-V Manager                    |
 | **Host**         | A shell on the host: SSH in as `captain` from the control node, or its console    |
-| **Host console** | A VM's console in Hyper-V Manager, or `cyclops`'s physical keyboard and screen   |
+| **Host console** | A VM's console in Hyper-V Manager                                                |
 | **Phone**        | The Android phone                                                               |
 
 **(NixOS-WSL)** marks control-node steps that only work from NixOS-WSL on the Hyper-V PC.
-A standalone NixOS control node can only manage `cyclops`. Hosts have no `nixos-rebuild`
+A standalone NixOS control node can't manage any host yet. Hosts have no `nixos-rebuild`
 and can't build, so never run a build on one.
 
 ## Back these up
@@ -157,8 +157,8 @@ Commit them. Run `just set-password <user>` again to change one, then deploy.
 **On:** control node.
 
 If `secrets/<host>.yaml` is missing, create it with random Pi-hole, Grafana and ntfy
-passwords, encrypted for the admin key only. It never replaces a file. `secrets/cyclops.yaml`,
-`secrets/tcyclops.yaml` and `secrets/dcyclops.yaml` already exist.
+passwords, encrypted for the admin key only. It never replaces a file. `secrets/tcyclops.yaml` and
+`secrets/dcyclops.yaml` already exist.
 
 ```bash
 just secrets-init <host>
@@ -203,48 +203,6 @@ just vm-rebuild dcyclops
 A VM installed before a layout change in `modules/nixos/hyperv-lvm.nix` must be reinstalled
 from a new ISO before its next deploy.
 
-### Install the server
-
-Steps 1 and 2 are on `cyclops` itself, the rest on the control node, which can be NixOS-WSL
-or a standalone NixOS machine.
-
-1. **On:** host console (`cyclops`). Install NixOS on `cyclops` with a UEFI boot setup.
-
-2. **On:** host console (`cyclops`). Let the control node deploy to it. Add this to
-   `/etc/nixos/configuration.nix` on the server, then run `sudo nixos-rebuild switch` there:
-
-   ```nix
-   services.openssh = {
-     enable = true;
-     settings = {
-       PasswordAuthentication = false;
-       KbdInteractiveAuthentication = false;
-       PermitRootLogin = "no";
-     };
-   };
-   nix.settings.trusted-users = [ "captain" ];
-   users.users.captain = {
-     isNormalUser = true;
-     extraGroups = [ "wheel" ];
-     hashedPassword = "<the contents of users/captain.hash>";
-     openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGshhca+nI1Qt1zDNvHCYIokESlCHMi+0JjvcdW7+3F nix-homelab-control-node" ];
-   };
-   ```
-
-3. **On:** control node. Replace the placeholder hardware config. `just deploy` refuses to
-   run until you do:
-
-   ```bash
-   just hardware-config cyclops <address>
-   ```
-
-4. **On:** control node. Set `system.stateVersion` in `hosts/cyclops/configuration.nix` to the release you
-   installed, and `git add` the changes.
-
-5. **On:** control node. If `secrets/cyclops.yaml` is missing, run `just secrets-init cyclops`. Then
-   [rekey and deploy](#rekey-and-deploy). The deploy creates `riley`, locks `root`, and
-   sets both logins from `users/`.
-
 ### Rekey and deploy
 
 **On:** control node, except the fingerprint check, which is on the host console. Rekeying
@@ -260,15 +218,14 @@ just secrets-rekey tcyclops
 
 It fetches the host's public key over SSH and shows its fingerprint. On the host console,
 run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` and compare, because a first
-connection can't prove whose key it is. For `cyclops`, give the address:
-`just secrets-rekey cyclops <address>`. Then deploy:
+connection can't prove whose key it is. Then deploy:
 
 ```bash
 just deploy tcyclops
 ```
 
 Commit the changed `.sops.yaml` and `secrets/<host>.yaml`. Deploy later changes to a VM
-first, then to the server.
+first.
 
 ### Move an existing host here
 
@@ -332,8 +289,8 @@ fingerprint check in 3 on the host console:
 The VMs' addresses are behind the Hyper-V NAT switch, so a phone on the home Wi-Fi can't
 reach them as they are. On Windows, add a route on the PC and tell the router, or map the port
 on Windows with `netsh interface portproxy` to the address and give the phone the PC's
-address instead, which also changes what the certificate must say. A physical `cyclops` on
-the LAN needs neither. The iOS app only gets alerts when it polls, which is delayed.
+address instead, which also changes what the certificate must say. The iOS app only gets
+alerts when it polls, which is delayed.
 
 ## 5. Recurring
 

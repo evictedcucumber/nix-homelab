@@ -1,6 +1,7 @@
-# Disk layout for the managed Hyper-V VMs, whose disks are 64 GiB. Follows the separate
-# file systems and mount options of the hardening benchmarks, plus /nix and the containers.
-# About 7.5 GiB of the VG stays unassigned for growing a volume later.
+# Disk layout for the managed Hyper-V VMs, both dynamic VHDX: a 256 GiB system disk for
+# the OS, configuration and service data, and a 1 TiB data disk for media. Follows the
+# separate file systems and mount options of the hardening benchmarks, plus /nix and the
+# containers. Most of vg0 stays unassigned for growing a volume later.
 { lib, ... }:
 let
   noSpecial = [
@@ -80,11 +81,48 @@ in
           };
           # Own volume so Loki can't fill /var. Container roots run setuid programs.
           containers = {
-            size = "16G";
+            size = "64G";
             mountpoint = "/var/lib/nixos-containers";
           };
         };
   };
+
+  disko.devices.disk.data = {
+    device = "/dev/sdb";
+    type = "disk";
+    content = {
+      type = "gpt";
+      partitions.lvm = {
+        size = "100%";
+        content = {
+          type = "lvm_pv";
+          vg = "data";
+        };
+      };
+    };
+  };
+
+  # Images, videos, ISOs and other large files. XFS allocates inodes on demand, so the
+  # dynamic VHDX only grows with the data written.
+  disko.devices.lvm_vg.data = {
+    type = "lvm_vg";
+    lvs.media = {
+      size = "100%FREE";
+      content = {
+        type = "filesystem";
+        format = "xfs";
+        mountpoint = "/srv/media";
+        mountOptions = noExec;
+      };
+    };
+  };
+
+  # Members can write to it without sudo, and new files keep the group.
+  users.groups.media.members = [
+    "captain"
+    "riley"
+  ];
+  systemd.tmpfiles.rules = [ "d /srv/media 2775 root media -" ];
 
   boot.specialFileSystems."/dev/shm".options = [ "noexec" ];
 }

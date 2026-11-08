@@ -29,7 +29,7 @@ nix build --no-link .#checks.x86_64-linux.eval
 # Building the hosts also runs the assertions the tests turn off. vm-dev is left out as its
 # closure is large and nothing depends on it.
 nix build --no-link --keep-going \
-    .#nixosConfigurations.{cyclops,dcyclops,tcyclops}.config.system.build.toplevel
+    .#nixosConfigurations.{dcyclops,tcyclops}.config.system.build.toplevel
 names=$(nix eval --raw "$tests" --apply \
     't: builtins.concatStringsSep " " (builtins.attrNames (removeAttrs t [ "boot" ]))')
 read -ra nspawn <<<"$names"
