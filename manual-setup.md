@@ -297,22 +297,10 @@ alerts when it polls, which is delayed.
 | When                              | Where                                       | Do                                                                |
 | --------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
 | After a NixOS-WSL restart         | Control node (NixOS-WSL), then Windows      | `just vm-forwarding`, because Windows resets forwarding on the WSL adapter |
-| After a deploy                    | Host                                        | [Reset the AIDE baseline](#aide-baseline)                         |
 | Changing a login password         | Control node                                | `just set-password <user>`, commit, deploy                        |
 | Changing a service password       | Control node                                | [Edit the secrets](#service-passwords), deploy                    |
 | After reinstalling a host         | Control node, and host console              | [Rekey and deploy](#rekey-and-deploy)                             |
 | After a compromise                | Control node                                | [Rotate the secrets](#after-a-compromise)                         |
-
-### AIDE baseline
-
-**On:** host.
-
-The weekly AIDE check of `/boot` and `/etc` fails after any deploy. To accept the new
-baseline, delete the database on the host, and the next run recreates it:
-
-```bash
-sudo rm /var/lib/aide/aide.db
-```
 
 ### Service passwords
 

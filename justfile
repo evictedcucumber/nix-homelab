@@ -144,7 +144,6 @@ set-password user:
     read -r -s -p "New password for {{ user }}: " first; echo
     read -r -s -p "Repeat it: " second; echo
     [ "$first" = "$second" ] || { echo "The passwords differ" >&2; exit 1; }
-    # What the hosts' pwquality asks of passwords, which a hash from the repo skips.
     if [ "${#first}" -lt 15 ] || [[ ! $first =~ [A-Z] ]] || [[ ! $first =~ [a-z] ]] || [[ ! $first =~ [0-9] ]] || [[ ! $first =~ [^A-Za-z0-9] ]]; then
         echo "Use at least 15 characters with upper and lower case, a digit and a symbol: the hash is public, so only the password protects it" >&2
         exit 1

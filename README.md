@@ -45,7 +45,6 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `treefmt.nix`     | Formatters and linters run by `nix fmt`                                  |
 | `justfile`        | Common commands                                                          |
 | `manual-setup.md` | Checklist of the setup steps only a person can do                        |
-| `stig-audit.md`   | Each STIG finding, and why it was adopted or skipped                     |
 
 On a new machine, start with [`manual-setup.md`](manual-setup.md): passwords, keys,
 backups, installs and the phone. The hosts fail to evaluate until `users/captain.hash` and
@@ -244,7 +243,8 @@ generation from the boot menu.
 SSH only accepts public keys, and only for `captain`. Keys must be set in
 `modules/nixos/common.nix`, because `sshd` ignores `~/.ssh/authorized_keys`. Forwarding
 and tunnels are off, so `ssh -L`, `-R`, `-D` and `-A` won't work. To give `riley` SSH
-access, add a key for that user and add `riley` to `AllowUsers`.
+access, add a key for that user and add `riley` to `AllowUsers`. Idle sessions close after
+10 minutes, and more than 30 new SSH connections a minute from one address are dropped.
 
 Home Manager manages each user's environment, and deploys with the system. Put settings
 for everyone in `home/common.nix`, and for one user in `home/<user>.nix`. Packages in
@@ -253,24 +253,6 @@ can. Set `home.stateVersion` once and leave it. A file Home Manager needs to rep
 renamed with `.hm-bak`. If a deploy fails on `home-manager-<user>.service`, check
 `journalctl -u home-manager-<user>`. A new user also needs adding to the list in
 `modules/nixos/home-manager.nix`.
-
-Activation opens the Nix store read-only, because `riley` isn't allowed to reach the
-Nix daemon. An activation step that writes to the store, such as a custom
-`home.activation` entry calling `nix-env`, fails there.
-
-`modules/nixos/hardening.nix` applies the Anduril NixOS STIG where it fits this homelab.
-`stig-audit.md` lists every finding and why it was adopted or skipped. In day-to-day use:
-
-- Only `root` and `wheel` can use Nix, so `riley` can't.
-- New passwords need 15 characters, all four character classes and 8 changed characters,
-  and can't be dictionary words. `just set-password` checks the length and classes, because
-  a hash from the repo skips the host's check.
-- `sudo` asks for the password every time.
-- Three failed console logins in 15 minutes lock an account for 15 minutes.
-- More than 30 new SSH connections a minute from one address are dropped.
-- USB devices plugged in after boot are blocked until allowed with `usbguard`.
-- A weekly AIDE check of `/boot` and `/etc` fails after any deploy. To accept the new
-  baseline, delete `/var/lib/aide/aide.db` and the next run recreates it.
 
 `modules/nixos/firewall.nix` drops everything in, out and forwarded except inbound SSH
 and outbound NTP, NTS and DNS over TLS, plus their replies. Hosts can't start any other
@@ -303,7 +285,7 @@ containers.web = {
 };
 ```
 
-The host's modules don't apply inside a container, so the hardening and SSH settings stop
+The host's modules don't apply inside a container, so the SSH settings stop
 at the host. Open a shell in one from the host:
 
 ```bash
@@ -419,7 +401,7 @@ downloaded either, for the same reason.
 
 `modules/containers/grafana/` runs Grafana, Loki and Prometheus on every host, in one container
 named `grafana` at `10.233.0.3`, because containers can't reach each other. Alloy runs on the
-host and sends its journal to Loki. The journal holds SSH and `sudo` logs, the audit records
+host and sends its journal to Loki. The journal holds SSH and `sudo` logs
 and every service's output, and each line is labelled with the host, `unit`, `identifier`,
 `transport` and `level`.
 
@@ -442,7 +424,7 @@ again, even on an existing database, so a change made in the interface doesn't l
 it with `sops -d --extract '["grafana-admin-password"]' secrets/<host>.yaml`.
 
 Loki is already the default data source, next to Prometheus. The Host logs dashboard shows
-failed SSH logins, `sudo` use, the rate of audit events, and errors by unit. The Containers
+failed SSH logins, `sudo` use, and errors by unit. The Containers
 dashboard shows each container's state, restarts, CPU, memory, tasks, log volume, errors and
 logs, for the hosts and containers picked at the top. Both come from this repo, so changes
 made in the interface don't last. To read logs, use Explore with a query such as:
@@ -462,7 +444,6 @@ shrink what it has already stored:
 | --- | --- |
 | Host journal | 2 GB, 1 month |
 | Each container's journal | 256 MB, 1 month |
-| `/var/log/audit` | 10 files of 50 MB, rotated by `auditd`, which drops the oldest |
 | `wtmp`, `btmp` | Monthly with one old copy, rotated by `logrotate` |
 | Pi-hole's `/var/log/pihole` | `logrotate`, by date from nixpkgs, and sooner at 100 MB for `pihole.log` or 50 MB for `FTL.log` and `webserver.log` |
 
