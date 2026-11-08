@@ -79,27 +79,27 @@ Run `just` to list the recipes:
 | `just build <host>`                    | Build a host's system without activating it  |
 | `just set-password <user>`             | Write a login password's hash to `users/`    |
 | `just secrets-init <host>`             | Create a host's secrets file, never replacing |
-| `just secrets-rekey <host> [target]`   | Encrypt a host's secrets for its SSH host key |
-| `just ntfy-cert <host> [target]`       | Print a host's ntfy certificate, to import into the phone |
+| `just secrets-rekey <host>`            | Encrypt a host's secrets for its SSH host key |
+| `just ntfy-cert <host>`                | Print a host's ntfy certificate, to import into the phone |
 | `just signing-key`                     | Create the deploy signing key if missing     |
 | `just vulnix <host>`                   | Scan a host's closure for known CVEs         |
-| `just deploy <host> [target]`          | Build and activate, offering a needed reboot |
-| `just deploy-test <host> [target]`     | Same, but revert on the host's next reboot   |
-| `just reboot <host> [target]`          | Reboot the host, after a `sudo` prompt       |
+| `just deploy <host>`                   | Build and activate, offering a needed reboot |
+| `just deploy-test <host>`              | Same, but revert on the host's next reboot   |
+| `just reboot <host>`                   | Reboot the host, after a `sudo` prompt       |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO † |
 | `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it † |
 | `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO † |
 | `just vm-dev <create\|destroy>`         | Create or remove the throwaway desktop VM † |
 | `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks † |
-| `just hardware-config <host> <target>` | Fetch a host's generated hardware config     |
+| `just hardware-config <host>`          | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
 
 † Needs a NixOS-WSL control node on the Hyper-V PC (`just iso` only when `dir` is left
 out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else, and
 managing `cyclops`, works from either kind of control node.
 
-`target` defaults to the VM's address, and `cyclops` must be given one. It's an address,
-which logs in as `captain`, or `<user>@<address>`. Flakes only see files tracked by git,
+Recipes that connect to a host log in as `captain` at the address `scripts/deploy.sh` knows
+for it. `cyclops` has none yet, so add it there first. Flakes only see files tracked by git,
 so `git add` new files before building.
 
 SSH connections from `just` offer only the private key
@@ -113,7 +113,7 @@ just deploy tcyclops
 ```
 
 ```bash
-just deploy cyclops <address>
+just deploy cyclops
 ```
 
 A deploy checks SSH first, then builds on the control node, signs the closure with the deploy key, and

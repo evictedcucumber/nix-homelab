@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # deploy.sh address <host>
-# deploy.sh <switch|test> <host> [target]
+# deploy.sh <switch|test> <host>
 # Builds a host here, signs and copies the closure, then activates it with one sudo prompt.
 set -euo pipefail
 
@@ -12,14 +12,14 @@ default_address() {
         dcyclops) echo 172.16.1.2 ;;
         tcyclops) echo 172.16.0.2 ;;
         *)
-            echo "pass a target: just <recipe> $1 <address>" >&2
+            echo "no known address for $1: add it to scripts/deploy.sh" >&2
             return 1
             ;;
     esac
 }
 
 usage() {
-    echo "usage: $0 address <host> | $0 <switch|test> <host> [target]" >&2
+    echo "usage: $0 address <host> | $0 <switch|test> <host>" >&2
     exit 2
 }
 
@@ -38,11 +38,9 @@ case "$action" in
     switch | test) ;;
     *) usage ;;
 esac
-[ $# -le 3 ] || usage
+[ $# -eq 2 ] || usage
 
-target=${3:-$(default_address "$host")}
-[[ $target == *@* ]] || target=$user@$target
-[[ $target =~ ^[A-Za-z0-9._-]+@[A-Za-z0-9._:-]+$ ]] || { echo "invalid target: $target" >&2; exit 2; }
+target=$user@$(default_address "$host")
 
 [ -f "$key" ] || { echo "no signing key at $key: run 'just signing-key'" >&2; exit 1; }
 

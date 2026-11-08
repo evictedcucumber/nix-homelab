@@ -1,4 +1,4 @@
-# The user when a target is only an address, because it has sudo
+# The user recipes log in as on a host, because it has sudo
 ssh_user := "captain"
 ssh_key := "~/.ssh/nix-homelab-control-node.key"
 export DEPLOY_USER := ssh_user
@@ -47,26 +47,27 @@ build host:
     nix build .#nixosConfigurations.{{ host }}.config.system.build.toplevel
 
 # Build locally, sign, copy and activate on the remote host, then offer a reboot if it needs one
-deploy host target=shell("scripts/deploy.sh address $1", host): (_require-hardware-config host) _known-hosts-dir && (_offer-reboot host target)
-    scripts/deploy.sh switch {{ host }} {{ target }}
+deploy host: (_require-hardware-config host) _known-hosts-dir && (_offer-reboot host)
+    scripts/deploy.sh switch {{ host }}
 
 # Activate on the remote host until its next reboot, to try a risky change
-deploy-test host target=shell("scripts/deploy.sh address $1", host): (_require-hardware-config host) _known-hosts-dir
-    scripts/deploy.sh test {{ host }} {{ target }}
+deploy-test host: (_require-hardware-config host) _known-hosts-dir
+    scripts/deploy.sh test {{ host }}
 
 # Print a host's ntfy certificate (PEM), to import into the phone. Public, but root-only on the host
-ntfy-cert host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
+ntfy-cert host: _known-hosts-dir
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Type {{ ssh_user }}'s sudo password on {{ host }}; nothing is shown while you do" >&2
-    cert=$(ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo cat /var/lib/nixos-containers/ntfy/var/lib/private/ntfy-sh/tls.crt | tr -d '\r')
+    address=$(scripts/deploy.sh address {{ host }})
+    cert=$(ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo cat /var/lib/nixos-containers/ntfy/var/lib/private/ntfy-sh/tls.crt | tr -d '\r')
     pem=$(sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' <<< "$cert")
     [ -n "$pem" ] || { echo "No certificate from {{ host }}: has ntfy started?" >&2; exit 1; }
     printf '%s\n' "$pem"
 
 # Reboot the host, which also drops a deploy-test
-reboot host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
-    ssh -t $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} sudo systemctl reboot
+reboot host: _known-hosts-dir
+    address=$(scripts/deploy.sh address {{ host }}) && ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo systemctl reboot
 
 # Build a VM's unattended-install ISO into out, by default Windows Downloads; booting it wipes the VM's disk
 iso host out=iso_dir:
@@ -91,9 +92,9 @@ vm-dev action:
 vm-forwarding *flags:
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
 
-# Replace a host's hardware config with one generated on the target
-hardware-config host target: _known-hosts-dir
-    ssh $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} nixos-generate-config --show-hardware-config > hosts/{{ host }}/hardware-configuration.nix.tmp
+# Replace a host's hardware config with one generated on the host
+hardware-config host: _known-hosts-dir
+    address=$(scripts/deploy.sh address {{ host }}) && ssh $NIX_SSHOPTS "{{ ssh_user }}@$address" nixos-generate-config --show-hardware-config > hosts/{{ host }}/hardware-configuration.nix.tmp
     mv hosts/{{ host }}/hardware-configuration.nix.tmp hosts/{{ host }}/hardware-configuration.nix
 
 # Create the deploy signing key if missing, and write its public half to keys/
@@ -125,8 +126,8 @@ secrets-init host:
     scripts/secrets.sh init {{ host }}
 
 # Encrypt a host's secrets for its current SSH host key, fetched over SSH, so it can decrypt them after a reinstall
-secrets-rekey host target=shell("scripts/deploy.sh address $1", host): _known-hosts-dir
-    scripts/secrets.sh rekey {{ host }} {{ target }}
+secrets-rekey host: _known-hosts-dir
+    address=$(scripts/deploy.sh address {{ host }}) && scripts/secrets.sh rekey {{ host }} "$address"
 
 # Ask for a login password twice, then write its yescrypt hash to users/<user>.hash for the repo
 [arg("user", pattern="[a-z][a-z0-9_-]*")]
@@ -162,11 +163,12 @@ _vm-dev-destroy:
 
 # Only a new kernel, initrd, or kernel modules can't be activated by a switch
 [private]
-_offer-reboot host target:
+_offer-reboot host:
     #!/usr/bin/env bash
     set -u
+    address=$(scripts/deploy.sh address {{ host }}) || exit 0
     status=0
-    ssh -n $NIX_SSHOPTS {{ if target =~ "@" { target } else { ssh_user + "@" + target } }} 'for p in initrd kernel kernel-modules; do [ "$(readlink /run/booted-system/$p)" = "$(readlink /run/current-system/$p)" ] || exit 10; done' || status=$?
+    ssh -n $NIX_SSHOPTS "{{ ssh_user }}@$address" 'for p in initrd kernel kernel-modules; do [ "$(readlink /run/booted-system/$p)" = "$(readlink /run/current-system/$p)" ] || exit 10; done' || status=$?
     case "$status" in
         0) exit 0 ;;
         10) ;;
@@ -174,8 +176,8 @@ _offer-reboot host target:
     esac
     read -r -p "{{ host }} needs a reboot for its new kernel or initrd. Reboot now? [y/N] " answer || answer=n
     case "$answer" in
-        [yY] | [yY][eE][sS]) exec {{ just_executable() }} reboot {{ host }} {{ target }} ;;
-        *) echo "Skipped. Run 'just reboot {{ host }} {{ target }}' when ready." ;;
+        [yY] | [yY][eE][sS]) exec {{ just_executable() }} reboot {{ host }} ;;
+        *) echo "Skipped. Run 'just reboot {{ host }}' when ready." ;;
     esac
 
 [private]
@@ -184,4 +186,4 @@ _known-hosts-dir:
 
 [private]
 _require-hardware-config host:
-    @if grep -qs '^# Placeholder' hosts/{{ host }}/hardware-configuration.nix; then echo "hosts/{{ host }} still has the placeholder hardware config: run 'just hardware-config {{ host }} <target>' first" >&2; exit 1; fi
+    @if grep -qs '^# Placeholder' hosts/{{ host }}/hardware-configuration.nix; then echo "hosts/{{ host }} still has the placeholder hardware config: run 'just hardware-config {{ host }}' first" >&2; exit 1; fi
