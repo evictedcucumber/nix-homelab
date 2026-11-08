@@ -84,6 +84,14 @@ let
       duration = "10m";
     })
     (mkRule {
+      uid = "raid-degraded";
+      title = "RAID array degraded";
+      expr = ''max by (host, device) ((node_md_disks_required - ignoring(state) node_md_disks{state="active"}) > bool 0)'';
+      summary = "{{ $labels.device }} is missing a disk";
+      severity = "critical";
+      duration = "0s";
+    })
+    (mkRule {
       uid = "memory-low";
       title = "Low memory";
       expr = "max by (host) ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < bool 0.10)";
