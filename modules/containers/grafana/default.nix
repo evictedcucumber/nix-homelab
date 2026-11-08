@@ -1,5 +1,5 @@
 # Grafana, Loki and Prometheus in one container, with Alloy on the host shipping its journal,
-# which holds auth logs and audit records, and every monitored container's journal and metrics.
+# which holds auth logs, and every monitored container's journal and metrics.
 # Containers can't reach each other, and can't read the host's journal, so the three sit
 # together and the shipper doesn't.
 let

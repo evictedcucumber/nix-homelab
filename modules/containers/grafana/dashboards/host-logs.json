@@ -1,7 +1,7 @@
 {
   "uid": "host-logs",
   "title": "Host logs",
-  "description": "Auth, sudo, audit and error lines from the host's journal.",
+  "description": "Auth, sudo and error lines from the host's journal.",
   "tags": [
     "logs"
   ],
@@ -143,72 +143,6 @@
       ]
     },
     {
-      "id": 3,
-      "type": "timeseries",
-      "title": "Audit events",
-      "description": "Kernel audit records that reach the journal, per second.",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "min": 0,
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 70,
-            "lineWidth": 1,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "editorMode": "code",
-          "queryType": "range",
-          "expr": "sum(rate({transport=\"audit\"}[$__interval])) or vector(0)",
-          "legendFormat": "audit"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "editorMode": "code",
-          "queryType": "range",
-          "expr": "sum(rate({transport=\"kernel\"} |= `audit: type=` [$__interval])) or vector(0)",
-          "legendFormat": "kernel audit"
-        }
-      ]
-    },
-    {
       "id": 4,
       "type": "timeseries",
       "title": "Errors by unit",
@@ -219,8 +153,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 24,
+        "x": 0,
         "y": 8
       },
       "fieldConfig": {
