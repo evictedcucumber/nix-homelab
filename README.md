@@ -213,11 +213,17 @@ the WSL adapter.
 
 Pi-hole, Grafana and ntfy each have an address of their own on the host's network:
 
-| Service              | Option               | `tcyclops`   | `dcyclops`   | `cyclops` |
-| -------------------- | -------------------- | ------------ | ------------ | --------- |
-| [Pi-hole](#pi-hole)  | `containers.pihole.lan.address`  | `172.16.0.3` | `172.16.1.3` | none yet  |
-| [Grafana](#logging)  | `containers.grafana.lan.address` | `172.16.0.4` | `172.16.1.4` | none yet  |
-| [ntfy](#alerts-ntfy) | `containers.ntfy.lan.address`    | `172.16.0.5` | `172.16.1.5` | none yet  |
+| Service              | Host number | `tcyclops`   | `dcyclops`   | `cyclops` |
+| -------------------- | ----------- | ------------ | ------------ | --------- |
+| [Pi-hole](#pi-hole)  | 3           | `172.16.0.3` | `172.16.1.3` | none yet  |
+| [Grafana](#logging)  | 4           | `172.16.0.4` | `172.16.1.4` | none yet  |
+| [ntfy](#alerts-ntfy) | 5           | `172.16.0.5` | `172.16.1.5` | none yet  |
+
+A host sets only its network, as `lan.prefix = "172.16.0";`, and gets its own address (`.2`),
+the gateway (`.1`) and each container's address from it. A container's module sets the last
+octet once, as `containers.<name>.lan.hostNumber`. Without a `lan.prefix`, as on `cyclops`
+for now, the container has no address. `containers.<name>.lan.address` still overrides the
+derived address, but the host then has to put it on an interface itself.
 
 It is a second address on the host, not a separate interface, because containers only get
 their [`ve-<name>` interface](#containers). The host forwards the service's ports from
@@ -327,7 +333,8 @@ certificate.
 2. Pick an unused address in `10.233.0.0/24`, and set it as `localAddress`.
 3. Add the directory to the imports in `modules/containers/default.nix`.
 4. To reach it from the host's network, list its `lan.ports` and set
-   `containers.<name>.lan.address` on a host.
+   `lan.hostNumber`, an unused last octet other than the host's (`2`) and the gateway's
+   (`1`). A host with a `lan.prefix` then gets the address.
 5. Import `../guest/monitoring.nix` in its `config` to have its logs shipped.
 
 Each container has its own firewall, inside the container, which drops everything in and

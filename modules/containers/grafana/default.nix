@@ -19,6 +19,7 @@ in
       "ntfy-grafana-password"
     ];
     lan = {
+      hostNumber = 4;
       ports = [
         {
           port = 443;

@@ -4,29 +4,5 @@
     ../../modules/nixos/hyperv-lvm.nix
   ];
 
-  networking = {
-    interfaces.eth0.ipv4.addresses = [
-      {
-        address = "172.16.0.2";
-        prefixLength = 24;
-      }
-      {
-        address = "172.16.0.3";
-        prefixLength = 24;
-      }
-      {
-        address = "172.16.0.4";
-        prefixLength = 24;
-      }
-      {
-        address = "172.16.0.5";
-        prefixLength = 24;
-      }
-    ];
-    defaultGateway = "172.16.0.1";
-  };
-
-  containers.pihole.lan.address = "172.16.0.3";
-  containers.grafana.lan.address = "172.16.0.4";
-  containers.ntfy.lan.address = "172.16.0.5";
+  lan.prefix = "172.16.0";
 }

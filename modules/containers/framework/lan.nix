@@ -1,7 +1,13 @@
 # Reaching a container from the host's network, on an address of its own that the host
-# forwards to the container. The host must also have the address on one of its interfaces.
+# forwards to the container. A host's lan.prefix and the container's hostNumber give the address,
+# and the host puts it on its interface.
 { config, lib, ... }:
 let
+  host = config;
+  withNumber = lib.filterAttrs (_: c: c.lan.hostNumber != null) config.containers;
+  numbers = lib.mapAttrsToList (_: c: c.lan.hostNumber) withNumber;
+  duplicates = lib.unique (lib.filter (n: lib.count (m: m == n) numbers > 1) numbers);
+
   privateRanges = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }";
 
   exposed = lib.filterAttrs (_: c: c.lan.address != null) config.containers;
@@ -54,15 +60,29 @@ let
   };
 in
 {
+  imports = [ ../../nixos/lan.nix ];
+
   options.containers = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule (
         { config, ... }:
         {
           options.lan = {
+            hostNumber = lib.mkOption {
+              type = lib.types.nullOr (lib.types.ints.between 1 254);
+              default = null;
+              example = 3;
+              description = "Last octet of the address on the host's lan.prefix.";
+            };
+
             address = lib.mkOption {
               type = lib.types.nullOr lib.types.str;
-              default = null;
+              default =
+                if host.lan.prefix != null && config.lan.hostNumber != null then
+                  "${host.lan.prefix}.${toString config.lan.hostNumber}"
+                else
+                  null;
+              defaultText = lib.literalExpression ''"''${config.lan.prefix}.''${hostNumber}" when both are set, else null'';
               example = "172.16.0.3";
               description = "Address on the host's network to reach the container on. Null leaves it unreachable from outside.";
             };
@@ -110,16 +130,35 @@ in
     );
   };
 
-  config = {
-    assertions = lib.mapAttrsToList (name: c: {
-      assertion = lib.any (interface: lib.any (a: a.address == c.lan.address) interface.ipv4.addresses) (
-        lib.attrValues config.networking.interfaces
-      );
-      message = "containers.${name}.lan.address ${c.lan.address} must also be set on one of the host's interfaces.";
-    }) exposed;
+  config = lib.mkMerge [
+    (lib.mkIf (config.lan.prefix != null) {
+      networking.interfaces.${config.lan.interface}.ipv4.addresses = map (n: {
+        address = "${config.lan.prefix}.${toString n}";
+        prefixLength = 24;
+      }) (lib.sort lib.lessThan numbers);
 
-    networking.nftables.tables = lib.mapAttrs' (
-      name: c: lib.nameValuePair "${name}-dnat" (table name c)
-    ) exposed;
-  };
+      assertions = [
+        {
+          assertion = duplicates == [ ];
+          message = "Containers share lan.hostNumber ${lib.concatMapStringsSep ", " toString duplicates}.";
+        }
+        {
+          assertion = !lib.any (n: n == config.lan.hostNumber || n == config.lan.gateway) numbers;
+          message = "A container's lan.hostNumber is the host's own or the gateway's last octet (${toString config.lan.hostNumber}, ${toString config.lan.gateway}).";
+        }
+      ];
+    })
+    {
+      assertions = lib.mapAttrsToList (name: c: {
+        assertion = lib.any (interface: lib.any (a: a.address == c.lan.address) interface.ipv4.addresses) (
+          lib.attrValues config.networking.interfaces
+        );
+        message = "containers.${name}.lan.address ${c.lan.address} must also be set on one of the host's interfaces.";
+      }) exposed;
+
+      networking.nftables.tables = lib.mapAttrs' (
+        name: c: lib.nameValuePair "${name}-dnat" (table name c)
+      ) exposed;
+    }
+  ];
 }

@@ -150,6 +150,12 @@ let
     (mkCase "ntfy's LAN address not on an interface" d [
       { containers.ntfy.lan.address = lib.mkForce "172.16.9.9"; }
     ] "containers.ntfy.lan.address")
+    (mkCase "container hostNumber shared" d [
+      { containers.ntfy.lan.hostNumber = lib.mkForce 3; }
+    ] "share lan.hostNumber")
+    (mkCase "container hostNumber equal to the host's" d [
+      { containers.ntfy.lan.hostNumber = lib.mkForce 2; }
+    ] "is the host's own or the gateway's")
     (mkCase "allowFrom naming a missing container" d [
       { containers.pihole.config.containerFirewall.allowFrom.missing = [ 80 ]; }
     ] "allowFrom")
