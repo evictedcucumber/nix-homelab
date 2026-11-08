@@ -1,9 +1,14 @@
-# Boots straight into an unattended install of `target`, which wipes the disk.
+# Boots straight into an unattended install of `target`, which wipes its disks.
 { target }:
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   inherit (target.config.system.build) destroyFormatMount toplevel;
-  inherit (target.config.disko.devices.disk.main) device;
+  devices = lib.mapAttrsToList (_: disk: disk.device) target.config.disko.devices.disk;
 in
 {
   virtualisation.hypervGuest.enable = true;
@@ -32,14 +37,16 @@ in
     };
     script = ''
       if [ "$(${pkgs.systemd}/bin/systemd-detect-virt)" != microsoft ]; then
-        echo "Refusing to wipe the disk: not running in a Hyper-V VM." >&2
+        echo "Refusing to wipe the disks: not running in a Hyper-V VM." >&2
         exit 1
       fi
 
-      # The disk can appear after this unit starts. If it never does, disko fails.
-      for _ in {1..60}; do
-        [ -b ${device} ] && break
-        sleep 1
+      # The disks can appear after this unit starts. If one never does, disko fails.
+      for device in ${lib.escapeShellArgs devices}; do
+        for _ in {1..60}; do
+          [ -b "$device" ] && break
+          sleep 1
+        done
       done
 
       ${destroyFormatMount}/bin/disko-destroy-format-mount --yes-wipe-all-disks
