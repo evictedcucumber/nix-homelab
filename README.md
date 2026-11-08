@@ -546,8 +546,8 @@ runs the Hyper-V daemons. The script stops if any of that isn't in place.
 `tcyclops` and `dcyclops` each get a 256 GB system disk for the OS, configuration and
 service data, and a 1 TB data disk mounted at `/srv/media` for images, videos, ISOs and other
 large files. Members of the `media` group (`captain` and `riley`) can write there. Both disks
-are dynamic VHDX files, so they only take the space the guest has written. The script adds a missing data disk to an existing VM but never resizes
-its system disk.
+are dynamic VHDX files, so they only take the space the guest has written. The script adds
+a missing data disk to an existing VM but never resizes its system disk.
 
 The ISO goes in your Windows Downloads folder, or in `iso_dir` if set. The VM's disks,
 configuration and checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script
