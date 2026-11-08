@@ -4,7 +4,6 @@
     ./common.nix
     ./dns.nix
     ./firewall.nix
-    ./hardening.nix
     ./home-manager.nix
     ./lan.nix
     ./log-retention.nix

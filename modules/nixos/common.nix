@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -94,6 +95,10 @@ in
       AllowAgentForwarding = false;
       AllowStreamLocalForwarding = false;
       PermitTunnel = false;
+      LogLevel = "VERBOSE";
+      ClientAliveInterval = 600;
+      ClientAliveCountMax = 1;
+      Banner = "${pkgs.writeText "ssh-banner" "Authorized use only. Activity on this system is logged.\n"}";
     };
   };
 

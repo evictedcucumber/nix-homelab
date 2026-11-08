@@ -27,6 +27,24 @@ in
           }
         '';
       };
+      # Limits new SSH connections per address. Runs before the firewall, because
+      # extraInputRules comes after its SSH accept.
+      tables.ssh-limit = {
+        family = "inet";
+        content = ''
+          set new_connections {
+            type ipv4_addr
+            flags dynamic, timeout
+            timeout 5m
+          }
+
+          chain input {
+            type filter hook input priority filter - 1; policy accept;
+
+            tcp dport 22 ct state new add @new_connections { ip saddr limit rate over 30/minute } drop
+          }
+        '';
+      };
     };
 
     firewall = {

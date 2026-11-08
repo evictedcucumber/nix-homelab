@@ -88,11 +88,6 @@ in
             mountpoint = "/var/log";
             mountOptions = noExec;
           };
-          var_log_audit = {
-            size = "2G";
-            mountpoint = "/var/log/audit";
-            mountOptions = noExec;
-          };
           # Own volume so Loki can't fill /var. Container roots run setuid programs.
           containers = {
             size = "64G";
