@@ -88,6 +88,13 @@ vm-rebuild host: (vm-create host "-Rebuild")
 vm-dev action:
     @{{ just_executable() }} iso_dir="{{ iso_dir }}" _vm-dev-{{ action }}
 
+# Trim a VM's file systems, then shut it down, shrink its VHDX files and start it again after a UAC prompt
+[arg("host", pattern="tcyclops|dcyclops")]
+vm-compact host: _known-hosts-dir
+    @echo "Type {{ ssh_user }}'s sudo password on {{ host }}; nothing is shown while you do" >&2
+    address=$(scripts/deploy.sh address {{ host }}) && ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo fstrim --all --verbose
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Compact
+
 # Enable Windows forwarding to the VM networks, after a UAC prompt; re-run after a WSL restart
 vm-forwarding *flags:
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}

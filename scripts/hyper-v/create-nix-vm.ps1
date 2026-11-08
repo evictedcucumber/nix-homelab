@@ -57,6 +57,9 @@
     -Destroy (ephemeral VMs only) does the same removal and stops there. It
     leaves the switch and NAT, which other VMs share.
 
+    -Compact shuts the VM down, compacts each attached VHDX so it gives back
+    the space the guest has trimmed, and starts the VM again if it was running.
+
 .PARAMETER VM
     Which VM to manage: tcyclops (permanent test VM), dcyclops (ephemeral dev
     VM) or vm-dev (ephemeral desktop VM). Per-VM name and sizing live in the
@@ -84,6 +87,12 @@
     checkpoint file. Only allowed for ephemeral VMs. WARNING: all VM data is
     lost.
 
+.PARAMETER Compact
+    Shut the VM down, compact its attached disks, and start it again if it
+    was running. Run fstrim in the guest first, or there is little to reclaim.
+    A checkpoint's parent disks are left alone, since changing one breaks the
+    chain.
+
 .PARAMETER Start
     Start the VM after it has been configured, if it is not already running.
 
@@ -102,6 +111,11 @@
     .\create-nix-vm.ps1 -VM vm-dev -Destroy
 
     Remove the desktop VM and everything stored for it.
+
+.EXAMPLE
+    .\create-nix-vm.ps1 -VM tcyclops -Compact
+
+    Shrink the test VM's disk files after trimming in the guest.
 
 .NOTES
     Run in an elevated PowerShell session (Administrator).
@@ -122,6 +136,8 @@ param(
     [switch]$Rebuild,
 
     [switch]$Destroy,
+
+    [switch]$Compact,
 
     [switch]$Start
 )
@@ -295,13 +311,55 @@ if ($Destroy)
     return
 }
 
+if ($Compact)
+{
+    $existingVm = Get-LabVM
+    if (-not $existingVm)
+    {
+        throw "VM '$Name' does not exist."
+    }
+
+    if ($existingVm.State -notin 'Running', 'Off')
+    {
+        throw "VM '$Name' is $($existingVm.State); start or turn it off first."
+    }
+
+    $wasRunning = $existingVm.State -eq 'Running'
+    if ($wasRunning)
+    {
+        Write-Host "Shutting down VM '$Name'..." -ForegroundColor Cyan
+        Stop-VM -VM $existingVm -Force -Confirm:$false
+    }
+
+    try
+    {
+        foreach ($path in Get-VMHardDiskDrive -VM (Get-LabVM) | ForEach-Object { $_.Path })
+        {
+            $before = (Get-Item -LiteralPath $path).Length
+            Write-Host "Compacting '$path'..." -ForegroundColor Cyan
+            Optimize-VHD -Path $path -Mode Full
+            $after = (Get-Item -LiteralPath $path).Length
+            Write-Host ("  {0:N1} GB -> {1:N1} GB" -f ($before / 1GB), ($after / 1GB))
+        }
+    }
+    finally
+    {
+        if ($wasRunning)
+        {
+            Write-Host "Starting VM '$Name'..." -ForegroundColor Cyan
+            Start-VM -VM (Get-LabVM)
+        }
+    }
+    return
+}
+
 # ---------------------------------------------------------------------
 # Prerequisites
 # ---------------------------------------------------------------------
 
 if (-not $IsoPath)
 {
-    throw "-IsoPath is required unless -Destroy is given."
+    throw "-IsoPath is required unless -Destroy or -Compact is given."
 }
 
 # Resolve the ISO to an absolute path up front: Hyper-V cmdlets and the VMMS
