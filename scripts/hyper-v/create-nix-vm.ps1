@@ -28,10 +28,11 @@
                 from scratch with -Rebuild (e.g. -VM dcyclops -Rebuild -Start).
       vm-dev    Ephemeral desktop VM for testing services on dcyclops's network.
 
-    tcyclops and dcyclops get a 256 GB system disk and a 1 TB data disk, and
-    vm-dev a 16 GB disk. All are dynamic VHDX, so each file on E: only grows
-    with the data the guest writes. A data disk missing from an existing VM is
-    added, but an existing system disk is never resized.
+    tcyclops and dcyclops get a 512 GB system disk and two 8 TB data disks,
+    which the guest mirrors, and vm-dev a 16 GB disk. All are dynamic VHDX, so
+    each file on E: only grows with the data the guest writes. Data disks
+    missing from an existing VM are added, but an existing system disk is never
+    resized, and any other disk attached to the VM stops the script.
 
     Creates the VM if it does not exist, or reconciles its configuration if it
     already exists. Most settings (vCPU count, nested virtualization, static
@@ -137,8 +138,9 @@ $VMConfigs = @{
         Name          = "[nix] tcyclops.homelab.zezura.cc"
         MemoryStartup = 4GB
         CPUCount      = 2
-        VHDSize       = 256GB
-        DataVHDSize   = 1TB
+        VHDSize       = 512GB
+        DataVHDSize   = 8TB
+        DataVHDCount  = 2
         Ephemeral     = $false
         SwitchName    = "NixHomelab"
         HostIPAddress = "172.16.0.1"
@@ -148,8 +150,9 @@ $VMConfigs = @{
         Name          = "[nix] dcyclops.homelab.zezura.cc"
         MemoryStartup = 4GB
         CPUCount      = 2
-        VHDSize       = 256GB
-        DataVHDSize   = 1TB
+        VHDSize       = 512GB
+        DataVHDSize   = 8TB
+        DataVHDCount  = 2
         Ephemeral     = $true
         SwitchName    = "NixHomelabDev"
         HostIPAddress = "172.16.1.1"
@@ -182,13 +185,18 @@ function Get-LabVM
 
 # A checkpoint points the drive at an .avhdx, so drives are matched by the VHD at the
 # bottom of its chain.
+function Get-BaseVhdPath([string]$Path)
+{
+    $vhd = Get-VHD -Path $Path
+    while ($vhd.ParentPath) { $vhd = Get-VHD -Path $vhd.ParentPath }
+    $vhd.Path
+}
+
 function Get-LabDiskDrive([string]$BaseVhdPath)
 {
-    Get-VMHardDiskDrive -VM (Get-LabVM) -ErrorAction SilentlyContinue | Where-Object {
-        $vhd = Get-VHD -Path $_.Path
-        while ($vhd.ParentPath) { $vhd = Get-VHD -Path $vhd.ParentPath }
-        $vhd.Path -eq $BaseVhdPath
-    } | Select-Object -First 1
+    Get-VMHardDiskDrive -VM (Get-LabVM) -ErrorAction SilentlyContinue |
+        Where-Object { (Get-BaseVhdPath $_.Path) -eq $BaseVhdPath } |
+        Select-Object -First 1
 }
 
 $Ephemeral = $VMConfig.Ephemeral
@@ -216,9 +224,14 @@ $VHDPath = Join-Path $VHDDirectory "$StorageName.vhdx"
 $VHDSize = $VMConfig.VHDSize
 $VHDSizeGB = [int]($VHDSize / 1GB)
 
-# Optional second disk, which the guest sees as /dev/sdb.
+# Optional data disks, attached in order so the guest sees them as /dev/sdb, /dev/sdc, ...
 $DataVHDSize = $VMConfig.DataVHDSize
-$DataVHDPath = Join-Path $VHDDirectory "$StorageName-data.vhdx"
+$DataVHDPaths = @(
+    if ($VMConfig.DataVHDCount)
+    {
+        1..$VMConfig.DataVHDCount | ForEach-Object { Join-Path $VHDDirectory "$StorageName-data$_.vhdx" }
+    }
+)
 
 $EnableTPM = $true
 
@@ -518,7 +531,7 @@ $vmIsNew = $false
 
 if (-not $currentVm)
 {
-    foreach ($path in @($VHDPath, $DataVHDPath))
+    foreach ($path in @($VHDPath) + $DataVHDPaths)
     {
         if (Test-Path $path)
         {
@@ -621,21 +634,33 @@ if ($systemVhd -and $systemVhd.Size -lt $VHDSize)
     Write-Host "System disk is $([int]($systemVhd.Size / 1GB)) GB, not $VHDSizeGB GB. It is never resized here; recreate the VM to get the new size." -ForegroundColor Yellow
 }
 
-if ($DataVHDSize)
+# The guest finds its disks by order, so an extra one, such as an older data disk, would
+# shift them.
+$expectedVhds = @($VHDPath) + $DataVHDPaths
+$unexpected = @(Get-VMHardDiskDrive -VM (Get-LabVM) |
+        Where-Object { $expectedVhds -notcontains (Get-BaseVhdPath $_.Path) } |
+        ForEach-Object { $_.Path })
+
+if ($unexpected)
 {
-    if (-not (Get-LabDiskDrive $DataVHDPath))
+    throw "VM '$Name' has disks this script doesn't manage: $($unexpected -join ', '). Remove them first, or use -Rebuild."
+}
+
+foreach ($dataVhdPath in $DataVHDPaths)
+{
+    if (-not (Get-LabDiskDrive $dataVhdPath))
     {
         $DataVHDSizeGB = [int]($DataVHDSize / 1GB)
 
-        if ($PSCmdlet.ShouldProcess($Name, "Create and attach ${DataVHDSizeGB}GB Dynamic data VHD"))
+        if ($PSCmdlet.ShouldProcess($Name, "Create and attach ${DataVHDSizeGB}GB Dynamic data VHD '$dataVhdPath'"))
         {
-            if (-not (Test-Path $DataVHDPath))
+            if (-not (Test-Path $dataVhdPath))
             {
                 Write-Host "Creating $DataVHDSizeGB GB Dynamic data VHD..." -ForegroundColor Cyan
-                New-VHD -Path $DataVHDPath -SizeBytes $DataVHDSize -Dynamic | Out-Null
+                New-VHD -Path $dataVhdPath -SizeBytes $DataVHDSize -Dynamic | Out-Null
             }
 
-            Add-VMHardDiskDrive -VM (Get-LabVM) -ControllerType SCSI -Path $DataVHDPath
+            Add-VMHardDiskDrive -VM (Get-LabVM) -ControllerType SCSI -Path $dataVhdPath
 
             if (-not ($vmIsNew -or $Rebuild -or $Reinstall))
             {
