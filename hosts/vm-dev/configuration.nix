@@ -1,8 +1,11 @@
 # Throwaway desktop for testing services on dcyclops's network. Root logs in by itself and
 # has no password, so this must never be deployed anywhere it can be reached.
-{ pkgs, ... }:
+{ dcyclops, pkgs, ... }:
 {
-  imports = [ ../../modules/nixos/hyperv.nix ];
+  imports = [
+    ../../modules/nixos/hyperv.nix
+    ../../modules/nixos/lan.nix
+  ];
 
   disko.devices.disk.main.content.partitions.root = {
     size = "100%";
@@ -13,16 +16,11 @@
     };
   };
 
-  networking = {
-    interfaces.eth0.ipv4.addresses = [
-      {
-        address = "172.16.1.254";
-        prefixLength = 24;
-      }
-    ];
-    defaultGateway = "172.16.1.1";
-    nameservers = [ "172.16.1.3" ];
+  lan = {
+    inherit (dcyclops.lan) prefix;
+    hostNumber = 254;
   };
+  networking.nameservers = [ dcyclops.containers.pihole.lan.address ];
 
   users.users.root.hashedPassword = "";
 
