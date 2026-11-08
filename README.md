@@ -543,13 +543,18 @@ SSH, and sets the user passwords from `users/<name>.hash` for the VM's console. 
 Generation 2, with nested virtualization and every integration service on, and the guest
 runs the Hyper-V daemons. The script stops if any of that isn't in place.
 
+`tcyclops` and `dcyclops` each get a 256 GB system disk and a 1 TB data disk, which holds
+`/var/lib/nixos-containers`. Both are dynamic VHDX files, so they only take the space the
+guest has written. The script adds a missing data disk to an existing VM but never resizes
+its system disk.
+
 The ISO goes in your Windows Downloads folder, or in `iso_dir` if set. The VM's disks,
 configuration and checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script
 stops if an existing VM has any of them elsewhere. The folder is the VM's name without the
 brackets, such as `nix tcyclops.homelab.zezura.cc`, because PowerShell reads brackets as
 wildcards.
 
-The ISO **wipes the disk with no prompt**, then reboots into the installed system. It only
+The ISO **wipes the VM's disks with no prompt**, then reboots into the installed system. It only
 checks that it's running under Hyper-V, not which VM it's in, so it would also wipe a
 Debian VM. Only attach it to its own VM.
 
