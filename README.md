@@ -11,11 +11,12 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from the control n
 | `tcyclops`      | Hyper-V VM                      | Windows PC                     | Long-lived test VM                            |
 | `dcyclops`      | Hyper-V VM                      | Windows PC                     | Throwaway dev VM, rebuilt whenever needed     |
 | `vm-dev`        | Hyper-V VM                      | Windows PC                     | Temporary desktop for testing `dcyclops`      |
-| `cyclops`       | Physical server                 | Homelab LAN                    | Production                                    |
+
+A physical production host, `cyclops`, is planned and will be added later.
 
 The control node's own configuration isn't in this repo. The Hyper-V recipes and reaching the VMs need NixOS-WSL
 on that PC, because the VMs sit on internal Hyper-V switches behind its NAT. A standalone
-NixOS control node can only manage `cyclops`. Each manual step says where it runs, in
+NixOS control node can't manage any host yet. Each manual step says where it runs, in
 [`manual-setup.md`](manual-setup.md).
 
 These VMs mirror the Debian `tcyclops` and `dcyclops` from the `homelab` repo and
@@ -95,10 +96,10 @@ Run `just` to list the recipes:
 | `just clean`                           | Remove `result` links                        |
 
 † Needs a NixOS-WSL control node on the Hyper-V PC (`just iso` only when `dir` is left
-out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else, and
-managing `cyclops`, works from either kind of control node.
+out). So does any recipe that connects to `tcyclops` or `dcyclops`. Everything else works
+from either kind of control node.
 
-`target` defaults to the VM's address, and `cyclops` must be given one. It's an address,
+`target` defaults to the VM's address, and any other host must be given one. It's an address,
 which logs in as `captain`, or `<user>@<address>`. Flakes only see files tracked by git,
 so `git add` new files before building.
 
@@ -106,14 +107,10 @@ SSH connections from `just` offer only the private key
 `~/.ssh/nix-homelab-control-node.key`, which matches the public key in
 `modules/nixos/common.nix`.
 
-Deploy changes to a VM first, then to the server:
+Deploy changes to a VM first:
 
 ```bash
 just deploy tcyclops
-```
-
-```bash
-just deploy cyclops <address>
 ```
 
 A deploy checks SSH first, then builds on the control node, signs the closure with the deploy key, and
@@ -181,7 +178,6 @@ Stable is only evaluated when something uses it. It stays on 26.05 because
 | ---------------- | --------------------- | --------------------------------------- |
 | `172.16.0.0/24`  | tcyclops (test, `.2`) | Hyper-V **NixHomelab** internal vSwitch |
 | `172.16.1.0/24`  | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
-| TBD              | cyclops (production)  | Physical homelab LAN behind the host    |
 
 Both VMs sit behind `NixHomelabNAT` on `172.16.0.0/16`, which
 `just vm-create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
@@ -213,17 +209,17 @@ the WSL adapter.
 
 Pi-hole, Grafana and ntfy each have an address of their own on the host's network:
 
-| Service              | Option               | `tcyclops`   | `dcyclops`   | `cyclops` |
-| -------------------- | -------------------- | ------------ | ------------ | --------- |
-| [Pi-hole](#pi-hole)  | `containers.pihole.lan.address`  | `172.16.0.3` | `172.16.1.3` | none yet  |
-| [Grafana](#logging)  | `containers.grafana.lan.address` | `172.16.0.4` | `172.16.1.4` | none yet  |
-| [ntfy](#alerts-ntfy) | `containers.ntfy.lan.address`    | `172.16.0.5` | `172.16.1.5` | none yet  |
+| Service              | Option               | `tcyclops`   | `dcyclops`   |
+| -------------------- | -------------------- | ------------ | ------------ |
+| [Pi-hole](#pi-hole)  | `containers.pihole.lan.address`  | `172.16.0.3` | `172.16.1.3` |
+| [Grafana](#logging)  | `containers.grafana.lan.address` | `172.16.0.4` | `172.16.1.4` |
+| [ntfy](#alerts-ntfy) | `containers.ntfy.lan.address`    | `172.16.0.5` | `172.16.1.5` |
 
 It is a second address on the host, not a separate interface, because containers only get
 their [`ve-<name>` interface](#containers). The host forwards the service's ports from
 private addresses to its container and drops everything else sent to the address, so SSH
 stays on the host's own address, and the service doesn't answer on that one. With no
-address, as on `cyclops` for now, nothing outside the host can reach the service.
+address, nothing outside the host can reach the service.
 
 ## Users
 
@@ -524,7 +520,7 @@ applies once you deploy.
 delayed. Android holds a connection to the server open instead, so it needs the phone to
 reach the address. The VMs' addresses are behind the Hyper-V NAT switch (see
 [Networking](#networking)), so a phone on the home Wi-Fi needs a route or port mapping to
-reach them. A physical `cyclops` on the LAN needs neither.
+reach them.
 
 Check it from the host:
 
@@ -536,7 +532,7 @@ sudo nixos-container run grafana -- journalctl -u grafana | grep -i alert
 ## Setting up hosts
 
 The steps for each host are in [`manual-setup.md`](manual-setup.md#3-per-host): installing a
-VM, installing `cyclops`, rekeying its secrets and deploying.
+VM, rekeying its secrets and deploying.
 
 The ISO installs the SSH key from `modules/nixos/common.nix`, which is the only way in over
 SSH, and sets the user passwords from `users/<name>.hash` for the VM's console. Each VM is
@@ -612,7 +608,7 @@ Set `TEST_BASE` to compare with another branch.
 | Step                                       | Without KVM         | Runs when                  |
 | ------------------------------------------ | ------------------- | -------------------------- |
 | `checks.x86_64-linux.eval`                 | Seconds             | A Nix file changed         |
-| Build `cyclops`, `dcyclops`, `tcyclops`    | Only what changed   | A Nix file changed         |
+| Build `dcyclops`, `tcyclops`               | Only what changed   | A Nix file changed         |
 | `container-isolation`, `logging`, `pihole` | Under a minute each | A Nix file changed         |
 | `nix-signing`, in QEMU                     | About a minute      | A Nix file changed         |
 | `boot`, in QEMU                            | About a minute      | Its inputs changed, below  |
