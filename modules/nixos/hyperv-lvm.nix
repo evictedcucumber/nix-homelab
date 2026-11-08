@@ -1,14 +1,28 @@
-# Disk layout for the managed Hyper-V VMs, both dynamic VHDX: a 256 GiB system disk for
-# the OS, configuration and service data, and a 1 TiB data disk for media. Follows the
-# separate file systems and mount options of the hardening benchmarks, plus /nix and the
-# containers. Most of vg0 stays unassigned for growing a volume later.
-{ lib, ... }:
+# Disk layout for the managed Hyper-V VMs, all dynamic VHDX: a 512 GiB system disk for the
+# OS, configuration and service data, and two 8 TiB data disks mirrored into one 8 TiB media
+# array. Follows the separate file systems and mount options of the hardening benchmarks,
+# plus /nix and the containers. Most of vg0 stays unassigned for growing a volume later.
+{ lib, pkgs, ... }:
 let
   noSpecial = [
     "nodev"
     "nosuid"
   ];
   noExec = noSpecial ++ [ "noexec" ];
+  mediaMember = device: {
+    inherit device;
+    type = "disk";
+    content = {
+      type = "gpt";
+      partitions.media = {
+        size = "100%";
+        content = {
+          type = "mdraid";
+          name = "media";
+        };
+      };
+    };
+  };
 in
 {
   disko.devices.disk.main.content.partitions.lvm = {
@@ -87,35 +101,29 @@ in
         };
   };
 
-  disko.devices.disk.data = {
-    device = "/dev/sdb";
-    type = "disk";
+  disko.devices.disk.media1 = mediaMember "/dev/sdb";
+  disko.devices.disk.media2 = mediaMember "/dev/sdc";
+
+  # Images, videos, ISOs and other large files. The members start as blank VHDX, so they
+  # already match and --assume-clean skips the initial sync, which would fill both files.
+  # XFS allocates inodes on demand, so the VHDX only grow with the data written.
+  disko.devices.mdadm.media = {
+    type = "mdadm";
+    level = 1;
+    metadata = "1.2";
+    extraArgs = [ "--assume-clean" ];
     content = {
-      type = "gpt";
-      partitions.lvm = {
-        size = "100%";
-        content = {
-          type = "lvm_pv";
-          vg = "data";
-        };
-      };
+      type = "filesystem";
+      format = "xfs";
+      mountpoint = "/srv/media";
+      mountOptions = noExec;
     };
   };
 
-  # Images, videos, ISOs and other large files. XFS allocates inodes on demand, so the
-  # dynamic VHDX only grows with the data written.
-  disko.devices.lvm_vg.data = {
-    type = "lvm_vg";
-    lvs.media = {
-      size = "100%FREE";
-      content = {
-        type = "filesystem";
-        format = "xfs";
-        mountpoint = "/srv/media";
-        mountOptions = noExec;
-      };
-    };
-  };
+  # mdmonitor needs somewhere to report to. A degraded array also raises a Grafana alert.
+  boot.swraid.mdadmConf = "PROGRAM ${pkgs.writeShellScript "mdadm-event" ''
+    ${pkgs.util-linux}/bin/logger -t mdadm -p daemon.warning "$1 on $2 $3"
+  ''}";
 
   # Members can write to it without sudo, and new files keep the group.
   users.groups.media.members = [

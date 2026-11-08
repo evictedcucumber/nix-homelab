@@ -546,11 +546,13 @@ SSH, and sets the user passwords from `users/<name>.hash` for the VM's console. 
 Generation 2, with nested virtualization and every integration service on, and the guest
 runs the Hyper-V daemons. The script stops if any of that isn't in place.
 
-`tcyclops` and `dcyclops` each get a 256 GB system disk for the OS, configuration and
-service data, and a 1 TB data disk mounted at `/srv/media` for images, videos, ISOs and other
-large files. Members of the `media` group (`captain` and `riley`) can write there. Both disks
-are dynamic VHDX files, so they only take the space the guest has written. The script adds
-a missing data disk to an existing VM but never resizes its system disk.
+`tcyclops` and `dcyclops` each get a 512 GB system disk for the OS, configuration and
+service data, and two 8 TB data disks mirrored (RAID 1) into one 8 TB array mounted at
+`/srv/media` for images, videos, ISOs and other large files. Members of the `media` group
+(`captain` and `riley`) can write there, and Grafana alerts if the array loses a disk. All
+disks are dynamic VHDX files, so they only take the space the guest has written. The script
+adds missing data disks to an existing VM, never resizes its system disk, and stops if the VM
+has any other disk attached.
 
 The ISO goes in your Windows Downloads folder, or in `iso_dir` if set. The VM's disks,
 configuration and checkpoints all go in its folder under `E:\Hyper-V VMs`, and the script
