@@ -7,6 +7,7 @@
   containers.pihole = {
     localAddress = "10.233.0.2";
     credentials = [ "pihole-web-password" ];
+    lan.hostNumber = 3;
     lan.ports = [
       {
         port = 53;

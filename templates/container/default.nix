@@ -12,9 +12,10 @@
     # $CREDENTIALS_DIRECTORY, after importing them in the service's ImportCredential.
     # credentials = [ "example-password" ];
 
-    # To reach it from the host's network, forward ports to it. A host then sets
-    # containers.example.lan.address, which must also be on one of its interfaces.
+    # To reach it from the host's network, give it a last octet and forward ports to it.
+    # A host with a lan.prefix gets the address on its interface by itself.
     # lan = {
+    #   hostNumber = 6;
     #   ports = [
     #     {
     #       port = 443;

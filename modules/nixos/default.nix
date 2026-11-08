@@ -6,6 +6,7 @@
     ./firewall.nix
     ./hardening.nix
     ./home-manager.nix
+    ./lan.nix
     ./log-retention.nix
     ./minimal.nix
     ./secrets.nix

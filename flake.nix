@@ -72,6 +72,7 @@
 
       # Not a managed server, so it leaves out the modules every host shares.
       vmDev = nixpkgs.lib.nixosSystem {
+        specialArgs.dcyclops = self.nixosConfigurations.dcyclops.config;
         modules = [
           { networking.hostName = "vm-dev"; }
           disko.nixosModules.disko

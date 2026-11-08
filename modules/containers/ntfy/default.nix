@@ -14,6 +14,7 @@ in
       "ntfy-phone-password"
     ];
     lan = {
+      hostNumber = 5;
       ports = [
         {
           port = 443;
