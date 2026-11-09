@@ -97,7 +97,7 @@
 
       forAllSystems =
         f:
-        nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (
+        nixpkgs.lib.genAttrs [ "x86_64-linux" ] (
           system:
           let
             pkgs = nixpkgs.legacyPackages.${system};
