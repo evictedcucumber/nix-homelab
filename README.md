@@ -91,7 +91,7 @@ Run `just` to list the recipes:
 | `just vm rebuild <vm>`                 | Recreate `dcyclops` or `dev` from a new ISO † |
 | `just vm destroy <vm>`                 | Remove `dcyclops` or `dev` with its disks and ISO † |
 | `just vm compact <vm>`                 | Trim a VM, then shrink its VHDX files † |
-| `just vm forwarding [flags]`           | Enable Windows forwarding to the VM networks † |
+| `just vm forwarding <enable\|disable>` | Turn Windows forwarding to the VM networks on or off † |
 | `just hardware-config <host>`          | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
 
@@ -202,7 +202,7 @@ every deploy activates on its target.
 changes. Reinstalling a VM changes its key, so `just vm create` and `just vm rebuild`
 remove the old one.
 
-After a NixOS-WSL restart, run `just vm forwarding` again, because Windows resets forwarding on
+After a NixOS-WSL restart, run `just vm forwarding enable` again, because Windows resets forwarding on
 the WSL adapter.
 
 ### Service addresses

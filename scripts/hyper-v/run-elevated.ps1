@@ -10,7 +10,7 @@
     afterwards, because an elevated process may not be able to read a WSL path.
 
 .EXAMPLE
-    .\run-elevated.ps1 .\enable-interface-forwarding.ps1 -SkipWsl
+    .\run-elevated.ps1 .\interface-forwarding.ps1 Enable -SkipWsl
 #>
 
 param(

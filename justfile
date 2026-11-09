@@ -74,7 +74,7 @@ iso host out=iso_dir:
     nix build .#{{ host }}-iso --out-link result-{{ host }}-iso
     dir="{{ out }}"; dir="${dir:-$({{ downloads }})}" && install -D -m 644 result-{{ host }}-iso/iso/*.iso "$dir/{{ host }}-nix-auto.iso"
 
-# Manage a Hyper-V VM after a UAC prompt: create, rebuild, destroy or compact tcyclops, dcyclops or dev, or enable forwarding
+# Manage a Hyper-V VM after a UAC prompt: create, rebuild, destroy or compact tcyclops, dcyclops or dev, or enable or disable forwarding
 [arg("action", pattern="create|rebuild|destroy|compact|forwarding")]
 vm action *args:
     @{{ just_executable() }} iso_dir="{{ iso_dir }}" ssh_user="{{ ssh_user }}" ssh_key="{{ ssh_key }}" powershell="{{ powershell }}" _vm-{{ action }} {{ args }}
@@ -164,10 +164,11 @@ _vm-compact host: _known-hosts-dir
     address=$(scripts/deploy.sh address {{ host }}) && ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo fstrim --all --verbose
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Compact
 
-# Re-run after a WSL restart
+# Enabling needs a re-run after a WSL restart
+[arg("action", pattern="enable|disable")]
 [private]
-_vm-forwarding *flags:
-    {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
+_vm-forwarding action *flags:
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/interface-forwarding.ps1)" -Action {{ capitalize(action) }} {{ flags }}
 
 # Only a new kernel, initrd, or kernel modules can't be activated by a switch
 [private]

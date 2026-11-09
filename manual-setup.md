@@ -188,7 +188,7 @@ Do this once per VM, on the Hyper-V PC, from NixOS-WSL. The ISO installs the SSH
    with another UAC prompt:
 
    ```bash
-   just vm forwarding
+   just vm forwarding enable
    ```
 
 3. [Rekey and deploy](#rekey-and-deploy).
@@ -296,7 +296,7 @@ alerts when it polls, which is delayed.
 
 | When                              | Where                                       | Do                                                                |
 | --------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
-| After a NixOS-WSL restart         | Control node (NixOS-WSL), then Windows      | `just vm forwarding`, because Windows resets forwarding on the WSL adapter |
+| After a NixOS-WSL restart         | Control node (NixOS-WSL), then Windows      | `just vm forwarding enable`, because Windows resets forwarding on the WSL adapter |
 | Changing a login password         | Control node                                | `just set-password <user>`, commit, deploy                        |
 | Changing a service password       | Control node                                | [Edit the secrets](#service-passwords), deploy                    |
 | After reinstalling a host         | Control node, and host console              | [Rekey and deploy](#rekey-and-deploy)                             |
