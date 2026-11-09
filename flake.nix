@@ -74,9 +74,9 @@
       vmDev = nixpkgs.lib.nixosSystem {
         specialArgs.dcyclops = self.nixosConfigurations.dcyclops.config;
         modules = [
-          { networking.hostName = "vm-dev"; }
+          { networking.hostName = "dev"; }
           disko.nixosModules.disko
-          ./hosts/vm-dev/configuration.nix
+          ./hosts/dev/configuration.nix
         ];
       };
 
@@ -110,10 +110,10 @@
     in
     {
       nixosConfigurations = nixpkgs.lib.genAttrs vmHosts mkHost // {
-        vm-dev = vmDev;
+        dev = vmDev;
       };
 
-      packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso (vmHosts ++ [ "vm-dev" ]));
+      packages.x86_64-linux = builtins.listToAttrs (map mkInstallerIso (vmHosts ++ [ "dev" ]));
 
       # Not checks, because `nix flake check` would then need uid-range. `just test` runs these.
       legacyPackages.x86_64-linux.tests = import ./tests {

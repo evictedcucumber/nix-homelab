@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Creates or updates the NixOS tcyclops (test), dcyclops (dev) or vm-dev (desktop)
+    Creates or updates the NixOS tcyclops (test), dcyclops (dev) or dev (desktop)
     Hyper-V VM idempotently, or destroys an ephemeral one.
 
 .DESCRIPTION
@@ -15,7 +15,7 @@
       VM        Switch          Host/gateway IP   Subnet
       tcyclops  NixHomelab      172.16.0.1        172.16.0.0/24
       dcyclops  NixHomelabDev   172.16.1.1        172.16.1.0/24
-      vm-dev    NixHomelabDev   172.16.1.1        172.16.1.0/24
+      dev       NixHomelabDev   172.16.1.1        172.16.1.0/24
 
     Both subnets use this lab's own NAT, "NixHomelabNAT", with prefix
     172.16.0.0/16, which this script creates if it is missing. It never changes
@@ -26,10 +26,10 @@
       tcyclops  Permanent test VM. Created once and reconciled on re-runs.
       dcyclops  Ephemeral dev VM. Brought up, used, brought down, and rebuilt
                 from scratch with -Rebuild (e.g. -VM dcyclops -Rebuild -Start).
-      vm-dev    Ephemeral desktop VM for testing services on dcyclops's network.
+      dev       Ephemeral desktop VM for testing services on dcyclops's network.
 
     tcyclops and dcyclops get a 512 GB system disk and two 8 TB data disks,
-    which the guest mirrors, and vm-dev a 16 GB disk. All are dynamic VHDX, so
+    which the guest mirrors, and dev a 16 GB disk. All are dynamic VHDX, so
     each file on E: only grows with the data the guest writes. Data disks
     missing from an existing VM are added, but an existing system disk is never
     resized, and any other disk attached to the VM stops the script.
@@ -62,7 +62,7 @@
 
 .PARAMETER VM
     Which VM to manage: tcyclops (permanent test VM), dcyclops (ephemeral dev
-    VM) or vm-dev (ephemeral desktop VM). Per-VM name and sizing live in the
+    VM) or dev (ephemeral desktop VM). Per-VM name and sizing live in the
     Desired Configuration section.
 
 .PARAMETER IsoPath
@@ -108,7 +108,7 @@
     into the unattended installer.
 
 .EXAMPLE
-    .\create-nix-vm.ps1 -VM vm-dev -Destroy
+    .\create-nix-vm.ps1 -VM dev -Destroy
 
     Remove the desktop VM and everything stored for it.
 
@@ -124,7 +124,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('tcyclops', 'dcyclops', 'vm-dev')]
+    [ValidateSet('tcyclops', 'dcyclops', 'dev')]
     [string]$VM,
 
     [string]$IsoPath,
@@ -174,8 +174,8 @@ $VMConfigs = @{
         HostIPAddress = "172.16.1.1"
         Subnet        = "172.16.1.0/24"
     }
-    "vm-dev" = @{
-        Name          = "[nix] vm-dev"
+    dev = @{
+        Name          = "[nix] dev"
         MemoryStartup = 4GB
         CPUCount      = 2
         VHDSize       = 16GB

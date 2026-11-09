@@ -10,7 +10,7 @@ NixOS homelab managed with a Nix flake, and deployed over SSH from the control n
 | Windows PC      | Windows with Hyper-V            | On its own                     | Hosts the three VMs below                     |
 | `tcyclops`      | Hyper-V VM                      | Windows PC                     | Long-lived test VM                            |
 | `dcyclops`      | Hyper-V VM                      | Windows PC                     | Throwaway dev VM, rebuilt whenever needed     |
-| `vm-dev`        | Hyper-V VM                      | Windows PC                     | Temporary desktop for testing `dcyclops`      |
+| `dev`           | Hyper-V VM                      | Windows PC                     | Temporary desktop for testing `dcyclops`      |
 
 A physical production host, `cyclops`, is planned and will be added later.
 
@@ -638,14 +638,14 @@ The nspawn tests need Nix settings on the machine that builds, which is the cont
 
 ## Testing from a desktop
 
-`vm-dev` is a temporary XFCE desktop with Firefox and a terminal, for testing services on
+`dev` is a temporary XFCE desktop with Firefox and a terminal, for testing services on
 `dcyclops` from another machine on its network:
 
 ```bash
 just vm create dev
 ```
 
-Open `[nix] vm-dev` in Hyper-V Manager. It installs itself, reboots, and logs in as `root`,
+Open `[nix] dev` in Hyper-V Manager. It installs itself, reboots, and logs in as `root`,
 which has no password. It's at `172.16.1.254`, and uses Pi-hole on `172.16.1.3` for DNS, so
 name lookups fail unless `dcyclops` is running. It has no SSH and isn't managed by
 `just deploy`.

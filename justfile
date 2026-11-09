@@ -77,7 +77,7 @@ iso host out=iso_dir:
 # Manage a Hyper-V VM after a UAC prompt: create, rebuild, destroy or compact tcyclops, dcyclops or dev, or enable forwarding
 [arg("action", pattern="create|rebuild|destroy|compact|forwarding")]
 vm action *args:
-    @{{ just_executable() }} iso_dir="{{ iso_dir }}" ssh_user="{{ ssh_user }}" ssh_key="{{ ssh_key }}" powershell="{{ powershell }}" _vm-{{ action }} {{ replace_regex(args, '^dev( |$)', 'vm-dev${1}') }}
+    @{{ just_executable() }} iso_dir="{{ iso_dir }}" ssh_user="{{ ssh_user }}" ssh_key="{{ ssh_key }}" powershell="{{ powershell }}" _vm-{{ action }} {{ args }}
 
 # Replace a host's hardware config with one generated on the host
 hardware-config host: _known-hosts-dir
@@ -138,18 +138,18 @@ clean:
     rm -f result result-*
 
 # Build a VM's ISO, create and start it, and forget its old host key
-[arg("host", pattern="tcyclops|dcyclops|vm-dev")]
+[arg("host", pattern="tcyclops|dcyclops|dev")]
 [private]
 _vm-create host *flags: (iso host iso_dir) _known-hosts-dir
     dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
-    @if [ {{ host }} != vm-dev ]; then rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})" && echo "{{ host }} has a new SSH host key, so it can't decrypt its secrets yet. Once it has booted, run 'just secrets-rekey {{ host }}' and then 'just deploy {{ host }}'."; fi
+    @if [ {{ host }} != dev ]; then rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})" && echo "{{ host }} has a new SSH host key, so it can't decrypt its secrets yet. Once it has booted, run 'just secrets-rekey {{ host }}' and then 'just deploy {{ host }}'."; fi
 
-[arg("host", pattern="dcyclops|vm-dev")]
+[arg("host", pattern="dcyclops|dev")]
 [private]
 _vm-rebuild host: (_vm-create host "-Rebuild")
 
 # Remove a VM with its disks, ISO and result link
-[arg("host", pattern="dcyclops|vm-dev")]
+[arg("host", pattern="dcyclops|dev")]
 [private]
 _vm-destroy host:
     {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Destroy

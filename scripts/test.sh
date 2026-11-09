@@ -26,7 +26,7 @@ fi
 # Fast, so a broken assertion fails before the slow builds.
 nix build --no-link .#checks.x86_64-linux.eval
 
-# Building the hosts also runs the assertions the tests turn off. vm-dev is left out as its
+# Building the hosts also runs the assertions the tests turn off. dev is left out as its
 # closure is large and nothing depends on it.
 nix build --no-link --keep-going \
     .#nixosConfigurations.{dcyclops,tcyclops}.config.system.build.toplevel
