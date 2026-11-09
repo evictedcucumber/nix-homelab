@@ -175,20 +175,20 @@ Do this once per VM, on the Hyper-V PC, from NixOS-WSL. The ISO installs the SSH
    `scripts/hyper-v/` need administrator rights:
 
    ```bash
-   just vm-create tcyclops
+   just vm create tcyclops
    ```
 
    The ISO **wipes the disk with no prompt**. It only checks that it runs under Hyper-V, so
    attach it only to its own VM, never to a Debian one. The ISO goes in your Windows
    Downloads folder. To put it elsewhere on a Windows drive:
-   `just iso_dir=/mnt/e/isos vm-create tcyclops`. Pass `-Force` or `-Reinstall` after the VM
+   `just iso_dir=/mnt/e/isos vm create tcyclops`. Pass `-Force` or `-Reinstall` after the VM
    name for those script options.
 
 2. **On:** control node (NixOS-WSL), then Windows. Enable forwarding on the new switches,
    with another UAC prompt:
 
    ```bash
-   just vm-forwarding
+   just vm forwarding
    ```
 
 3. [Rekey and deploy](#rekey-and-deploy).
@@ -197,7 +197,7 @@ To throw away `dcyclops` and start again, which is refused for `tcyclops`, run t
 control node (NixOS-WSL), then Windows:
 
 ```bash
-just vm-rebuild dcyclops
+just vm rebuild dcyclops
 ```
 
 A VM installed before a layout change in `modules/nixos/hyperv-lvm.nix` must be reinstalled
@@ -210,7 +210,7 @@ or deploying to `tcyclops` or `dcyclops` needs NixOS-WSL.
 
 A new install has a new SSH host key, so it can't decrypt `secrets/<host>.yaml` yet, and
 its Pi-hole, Grafana and ntfy containers keep restarting until you rekey. `just deploy`
-refuses until it is done. Do this after every install, including `just vm-rebuild`:
+refuses until it is done. Do this after every install, including `just vm rebuild`:
 
 ```bash
 just secrets-rekey tcyclops
@@ -296,7 +296,7 @@ alerts when it polls, which is delayed.
 
 | When                              | Where                                       | Do                                                                |
 | --------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
-| After a NixOS-WSL restart         | Control node (NixOS-WSL), then Windows      | `just vm-forwarding`, because Windows resets forwarding on the WSL adapter |
+| After a NixOS-WSL restart         | Control node (NixOS-WSL), then Windows      | `just vm forwarding`, because Windows resets forwarding on the WSL adapter |
 | Changing a login password         | Control node                                | `just set-password <user>`, commit, deploy                        |
 | Changing a service password       | Control node                                | [Edit the secrets](#service-passwords), deploy                    |
 | After reinstalling a host         | Control node, and host console              | [Rekey and deploy](#rekey-and-deploy)                             |

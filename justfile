@@ -74,30 +74,10 @@ iso host out=iso_dir:
     nix build .#{{ host }}-iso --out-link result-{{ host }}-iso
     dir="{{ out }}"; dir="${dir:-$({{ downloads }})}" && install -D -m 644 result-{{ host }}-iso/iso/*.iso "$dir/{{ host }}-nix-auto.iso"
 
-# Build a VM's ISO, create and start the VM on Windows after a UAC prompt, and forget its old host key
-vm-create host *flags: (iso host iso_dir) _known-hosts-dir
-    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
-    rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})"
-    @echo "{{ host }} has a new SSH host key, so it can't decrypt its secrets yet. Once it has booted, run 'just secrets-rekey {{ host }}' and then 'just deploy {{ host }}'."
-
-# Throw away dcyclops and reinstall it from a new ISO, after a UAC prompt
-vm-rebuild host: (vm-create host "-Rebuild")
-
-# Create and start the throwaway desktop VM, or destroy it with its disk and ISO, after a UAC prompt
-[arg("action", pattern="create|destroy")]
-vm-dev action:
-    @{{ just_executable() }} iso_dir="{{ iso_dir }}" _vm-dev-{{ action }}
-
-# Trim a VM's file systems, then shut it down, shrink its VHDX files and start it again after a UAC prompt
-[arg("host", pattern="tcyclops|dcyclops")]
-vm-compact host: _known-hosts-dir
-    @echo "Type {{ ssh_user }}'s sudo password on {{ host }}; nothing is shown while you do" >&2
-    address=$(scripts/deploy.sh address {{ host }}) && ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo fstrim --all --verbose
-    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Compact
-
-# Enable Windows forwarding to the VM networks, after a UAC prompt; re-run after a WSL restart
-vm-forwarding *flags:
-    {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
+# Manage a Hyper-V VM after a UAC prompt: create, rebuild, destroy or compact tcyclops, dcyclops or dev, or enable forwarding
+[arg("action", pattern="create|rebuild|destroy|compact|forwarding")]
+vm action *args:
+    @{{ just_executable() }} iso_dir="{{ iso_dir }}" ssh_user="{{ ssh_user }}" ssh_key="{{ ssh_key }}" powershell="{{ powershell }}" _vm-{{ action }} {{ replace_regex(args, '^dev( |$)', 'vm-dev${1}') }}
 
 # Replace a host's hardware config with one generated on the host
 hardware-config host: _known-hosts-dir
@@ -157,15 +137,37 @@ set-password user:
 clean:
     rm -f result result-*
 
+# Build a VM's ISO, create and start it, and forget its old host key
+[arg("host", pattern="tcyclops|dcyclops|vm-dev")]
 [private]
-_vm-dev-create: (iso "vm-dev" iso_dir)
-    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM vm-dev -IsoPath "$(wslpath -wa "$dir/vm-dev-nix-auto.iso")" -Start
+_vm-create host *flags: (iso host iso_dir) _known-hosts-dir
+    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -IsoPath "$(wslpath -wa "$dir/{{ host }}-nix-auto.iso")" -Start {{ flags }}
+    @if [ {{ host }} != vm-dev ]; then rm -f ~/.ssh/known_hosts.d/"$(scripts/deploy.sh address {{ host }})" && echo "{{ host }} has a new SSH host key, so it can't decrypt its secrets yet. Once it has booted, run 'just secrets-rekey {{ host }}' and then 'just deploy {{ host }}'."; fi
 
+[arg("host", pattern="dcyclops|vm-dev")]
 [private]
-_vm-dev-destroy:
-    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM vm-dev -Destroy
-    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && rm -f "$dir/vm-dev-nix-auto.iso"
-    rm -f result-vm-dev-iso
+_vm-rebuild host: (_vm-create host "-Rebuild")
+
+# Remove a VM with its disks, ISO and result link
+[arg("host", pattern="dcyclops|vm-dev")]
+[private]
+_vm-destroy host:
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Destroy
+    dir="{{ iso_dir }}"; dir="${dir:-$({{ downloads }})}" && rm -f "$dir/{{ host }}-nix-auto.iso"
+    rm -f result-{{ host }}-iso
+
+# Trim a VM's file systems, then shut it down, shrink its VHDX files and start it again
+[arg("host", pattern="tcyclops|dcyclops")]
+[private]
+_vm-compact host: _known-hosts-dir
+    @echo "Type {{ ssh_user }}'s sudo password on {{ host }}; nothing is shown while you do" >&2
+    address=$(scripts/deploy.sh address {{ host }}) && ssh -t $NIX_SSHOPTS "{{ ssh_user }}@$address" sudo fstrim --all --verbose
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/create-nix-vm.ps1)" -VM {{ host }} -Compact
+
+# Re-run after a WSL restart
+[private]
+_vm-forwarding *flags:
+    {{ elevated }} "$(wslpath -wa scripts/hyper-v/enable-interface-forwarding.ps1)" {{ flags }}
 
 # Only a new kernel, initrd, or kernel modules can't be activated by a switch
 [private]

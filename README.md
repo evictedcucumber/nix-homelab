@@ -87,10 +87,11 @@ Run `just` to list the recipes:
 | `just deploy-test <host>`              | Same, but revert on the host's next reboot   |
 | `just reboot <host>`                   | Reboot the host, after a `sudo` prompt       |
 | `just iso <vm> [dir]`                  | Build a VM's unattended-install ISO † |
-| `just vm-create <vm> [flags]`          | Build a VM's ISO, then create and start it † |
-| `just vm-rebuild <vm>`                 | Recreate `dcyclops` from a new ISO † |
-| `just vm-dev <create\|destroy>`         | Create or remove the throwaway desktop VM † |
-| `just vm-forwarding [flags]`           | Enable Windows forwarding to the VM networks † |
+| `just vm create <vm> [flags]`          | Build a VM's ISO, then create and start it † |
+| `just vm rebuild <vm>`                 | Recreate `dcyclops` or `dev` from a new ISO † |
+| `just vm destroy <vm>`                 | Remove `dcyclops` or `dev` with its disks and ISO † |
+| `just vm compact <vm>`                 | Trim a VM, then shrink its VHDX files † |
+| `just vm forwarding [flags]`           | Enable Windows forwarding to the VM networks † |
 | `just hardware-config <host>`          | Fetch a host's generated hardware config     |
 | `just clean`                           | Remove `result` links                        |
 
@@ -179,15 +180,15 @@ Stable is only evaluated when something uses it. It stays on 26.05 because
 | `172.16.1.0/24`  | dcyclops (dev, `.2`)  | Hyper-V **NixHomelabDev** internal vSwitch |
 
 Both VMs sit behind `NixHomelabNAT` on `172.16.0.0/16`, which
-`just vm-create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
+`just vm create` creates if it's missing. The Debian lab stays on `10.0.1.0/24` and
 `10.0.2.0/24` behind its own `HomelabNAT` on `10.0.0.0/16`, and the scripts here never
 change or remove any NAT. Each host holds the `.1` address of its VM's subnet as the
 gateway, and the VMs use static addresses because internal switches have no DHCP.
 
 Microsoft [supports only one NAT per host](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/setup-nat-network),
 and warns that creating more leaves the system in an unknown state. Running both labs
-is therefore unsupported, and `just vm-create` warns when it finds another NAT. If VM
-networking misbehaves with both in place, check `Get-NetNat` first. `just vm-create`
+is therefore unsupported, and `just vm create` warns when it finds another NAT. If VM
+networking misbehaves with both in place, check `Get-NetNat` first. `just vm create`
 also stops if another adapter has an address in `172.16.0.0/16`, because Windows picks
 the WSL and Default Switch subnets from the same private range.
 
@@ -198,10 +199,10 @@ never touches `~/.ssh/known_hosts`. Builds only add to the control node's Nix st
 every deploy activates on its target.
 
 `just` trusts a host's key the first time it connects, and refuses it if it later
-changes. Reinstalling a VM changes its key, so `just vm-create` and `just vm-rebuild`
+changes. Reinstalling a VM changes its key, so `just vm create` and `just vm rebuild`
 remove the old one.
 
-After a NixOS-WSL restart, run `just vm-forwarding` again, because Windows resets forwarding on
+After a NixOS-WSL restart, run `just vm forwarding` again, because Windows resets forwarding on
 the WSL adapter.
 
 ### Service addresses
@@ -548,7 +549,7 @@ Debian VM. Only attach it to its own VM.
 The ISO contains the system as it was when built, and a deploy updates it from there. A
 deploy can't change a VM's disk layout. A VM installed before a layout change in
 `modules/nixos/hyperv-lvm.nix` must be reinstalled from a new ISO before its next deploy, or
-it won't find its disks on reboot. Reinstalling wipes the disk. `just vm-rebuild dcyclops`
+it won't find its disks on reboot. Reinstalling wipes the disk. `just vm rebuild dcyclops`
 throws `dcyclops` away and reinstalls it, and is refused for `tcyclops`.
 
 ## Secrets and passwords
@@ -585,7 +586,7 @@ so its Pi-hole, Grafana and ntfy containers fail and restart until you rekey.
 and asks you to confirm it matches `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on
 the host's console, because a first connection can't prove whose key it is. It then
 replaces the recipient marked `# host` in `.sops.yaml`, keeping every other recipient such
-as a second admin key, and re-encrypts `secrets/<host>.yaml`. `just vm-create` prints this
+as a second admin key, and re-encrypts `secrets/<host>.yaml`. `just vm create` prints this
 step, and `just deploy` checks the host's key is a recipient first and refuses, naming this
 recipe, if it isn't. Both need the dev shell, for `ssh-to-age`.
 
@@ -641,7 +642,7 @@ The nspawn tests need Nix settings on the machine that builds, which is the cont
 `dcyclops` from another machine on its network:
 
 ```bash
-just vm-dev create
+just vm create dev
 ```
 
 Open `[nix] vm-dev` in Hyper-V Manager. It installs itself, reboots, and logs in as `root`,
@@ -661,5 +662,5 @@ nix shell nixpkgs#dnsperf -c dnsperf -d ~/tests/dns/queries.txt -s 172.16.1.3 -l
 To turn it off and delete it, with its folder under `E:\Hyper-V VMs` and its ISO:
 
 ```bash
-just vm-dev destroy
+just vm destroy dev
 ```
