@@ -35,7 +35,6 @@ run alongside them. Both labs use the same FQDNs, and only the Hyper-V VM names 
 | `hosts/<name>/`   | Per-host configuration                                                   |
 | `modules/nixos/`  | Config shared between hosts, and the unattended installer                |
 | `modules/containers/` | The container framework, the in-container modules, and each container |
-| `templates/`      | `container`, a skeleton for a new container                              |
 | `home/`           | Home Manager config for each user                                        |
 | `scripts/`        | `deploy.sh`, `secrets.sh`, `check-secrets.sh`, the test runner, and Hyper-V network and VM setup |
 | `secrets/`        | Per-host sops files holding the service passwords                        |
@@ -308,7 +307,7 @@ certificate.
 
 ### Adding a container
 
-1. Copy `templates/container/` to `modules/containers/<name>/` and replace `example`.
+1. Create `modules/containers/<name>/default.nix`, starting from an existing container such as `ntfy`.
 2. Pick an unused address in `10.233.0.0/24`, and set it as `localAddress`.
 3. Add the directory to the imports in `modules/containers/default.nix`.
 4. To reach it from the host's network, list its `lan.ports` and set
